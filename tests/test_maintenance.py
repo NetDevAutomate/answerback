@@ -49,13 +49,22 @@ def test_retention_schema_preserves_receipts_and_tracks_metadata_mutation(tmp_pa
 
 
 def fixture_task(
-    tmp_path: Path, *, key: str = "one", status: str = "completed", metadata: dict | None = None
+    tmp_path: Path,
+    *,
+    key: str = "one",
+    status: str = "completed",
+    metadata: dict | None = None,
+    subject: str | None = None,
 ) -> tuple[TaskStore, dict]:
     from answerback_bridge.retention import migrate_tasks
 
     store = TaskStore(tmp_path / "tasks.sqlite")
     task, _ = store.reserve(
-        "kiro:" + key, "private résumé\n", key, metadata or {"kind": "kiro", "cwd": "/project"}
+        "kiro:" + key,
+        "private résumé\n",
+        key,
+        metadata or {"kind": "kiro", "cwd": "/project"},
+        subject=subject,
     )
     task = store.update(
         task["id"], status, result="private done" if status == "completed" else None
@@ -439,11 +448,7 @@ def test_task_subjects_column_drift_fails_closed(tmp_path: Path) -> None:
     protects the store like drift in `tasks`, rather than being pruned through."""
     from answerback_bridge.maintenance import Maintenance
 
-    store, task = fixture_task(tmp_path)
-    with store.connection() as db:
-        db.execute(
-            "INSERT INTO task_subjects(task_id, subject) VALUES (?, ?)", (task["id"], "v1.0")
-        )
+    store, task = fixture_task(tmp_path, subject="v1.0")
     plan = Maintenance(tmp_path / "bridge.json").plan()
     assert [action["id"] for action in plan["actions"]] == [task["id"]]
     assert plan["protected"].get("unsupported_schema", 0) == 0

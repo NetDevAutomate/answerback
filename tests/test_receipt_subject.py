@@ -232,7 +232,7 @@ def test_an_old_store_gains_the_subject_table_and_keeps_its_task_columns(tmp_pat
     db.close()
     assert columns == before and "subject" not in columns and version == 0
     assert {"task_subjects", "task_subjects_subject", "task_subjects_immutable"} <= names
-    assert {"task_subjects_deleted", "task_subjects_kept"} <= names
+    assert {"task_subjects_deleted", "task_subjects_kept", "task_subjects_reserved"} <= names
     TaskStore(path)  # a second open migrates nothing and does not fail
 
 
@@ -257,6 +257,46 @@ def test_a_subject_cannot_be_deleted_and_replaced_while_its_task_exists(tmp_path
                 "INSERT INTO task_subjects (task_id, subject) VALUES (?, 'forged')", (task["id"],)
             )
     assert store.get(task["id"])["subject"] == SHA
+
+
+def test_a_subjectless_receipt_cannot_acquire_a_subject_later(tmp_path: Path) -> None:
+    """T-277 review 3: a subject is written only with its task's INSERT, so a stored
+    receipt without one keeps none, on a fresh connection or after other inserts."""
+    store = TaskStore(tmp_path / "tasks.sqlite")
+    task, _ = store.reserve("t", "Review", "plain", {"kind": "fixture"})
+    with pytest.raises(sqlite3.IntegrityError, match="written only with its task"):
+        with store.connection() as db:
+            db.execute(
+                "INSERT INTO task_subjects (task_id, subject) VALUES (?, 'added-later')",
+                (task["id"],),
+            )
+    with pytest.raises(sqlite3.IntegrityError, match="written only with its task"):
+        with store.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            store.reserve_in_transaction(db, "u", "Other", "other", {"kind": "fixture"})
+            db.execute(
+                "INSERT INTO task_subjects (task_id, subject) VALUES (?, 'added-later')",
+                (task["id"],),
+            )
+    assert store.get(task["id"])["subject"] is None
+    assert store.by_subject("added-later") == ([], 0)
+    # The reservation path still writes a subject with its task.
+    labelled, _ = store.reserve("v", "Review", "labelled", {"kind": "fixture"}, subject=SHA)
+    assert store.get(labelled["id"])["subject"] == SHA
+
+
+def test_an_orphan_subject_is_refused_and_never_counted(tmp_path: Path) -> None:
+    store = TaskStore(tmp_path / "tasks.sqlite")
+    with pytest.raises(sqlite3.IntegrityError, match="written only with its task"):
+        with store.connection() as db:
+            db.execute("INSERT INTO task_subjects (task_id, subject) VALUES ('orphan', 'o')")
+    # A row left by a store from before the trigger: counted only with its task.
+    task, _ = store.reserve("t", "Review", "r1", {"kind": "fixture"}, subject="o")
+    with store.connection() as db:
+        db.execute("DROP TRIGGER task_subjects_reserved")
+        db.execute("INSERT INTO task_subjects (task_id, subject) VALUES ('orphan', 'o')")
+    rows, total = store.by_subject("o")
+    assert [row["id"] for row in rows] == [task["id"]] and total == 1
 
 
 def test_by_subject_searches_the_whole_store_newest_first(tmp_path: Path) -> None:

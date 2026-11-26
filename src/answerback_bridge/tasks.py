@@ -312,6 +312,8 @@ class TaskStore:
                 json.dumps(stored),
             ),
         )
+        # Straight after the task's INSERT: the `task_subjects_reserved` trigger refuses a
+        # subject for any task but the one this connection inserted last.
         if subject is not None:
             db.execute(
                 "INSERT INTO task_subjects (task_id, subject) VALUES (?, ?)", (task_id, subject)
@@ -896,7 +898,9 @@ class TaskStore:
         with self.connection() as db:
             db.execute("BEGIN")
             total = db.execute(
-                "SELECT COUNT(*) FROM task_subjects WHERE subject=?", (subject,)
+                "SELECT COUNT(*) FROM task_subjects JOIN tasks ON tasks.id=task_subjects.task_id "
+                "WHERE task_subjects.subject=?",
+                (subject,),
             ).fetchone()
             rows = db.execute(
                 "SELECT tasks.* FROM task_subjects JOIN tasks ON tasks.id=task_subjects.task_id "

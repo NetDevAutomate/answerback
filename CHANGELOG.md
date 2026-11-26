@@ -21,8 +21,8 @@ to, stay in the maintainers' private archive.
   subject differs from the submission's, or one reserved in another store, with "inspect it
   before sending again". The provider conformance fixture gains a sixth case, `subject`, run
   with a declared `subject_probe`. The task store gains a `task_subjects` table, added on
-  first open, with triggers that refuse changing a stored subject or deleting it while its
-  receipt exists; maintenance refuses a `task_subjects` table with unknown columns; the `tasks` table itself is
+  first open, with triggers that refuse changing a stored subject, deleting it while its
+  receipt exists, or adding one other than with its receipt's own insert; maintenance refuses a `task_subjects` table with unknown columns; the `tasks` table itself is
   unchanged and older receipts read `null`. Maintenance keeps a subject when it prunes a
   receipt's message and result. A bridge downgraded onto a migrated store still sends and
   reads receipts but shows and compares no subject, and its maintenance treats the store as an

@@ -85,12 +85,24 @@ def migrate_subjects(db: sqlite3.Connection) -> None:
 
     A table rather than a `tasks` column, so the `tasks` columns that positional inserts and
     maintenance's schema check rely on are unchanged. A row is written by the reservation
-    that creates the receipt, never updated or deleted on its own, and removed with its task.
+    that creates the receipt, straight after its task's INSERT, never added later, updated
+    or deleted on its own, and removed with its task.
     """
     db.execute(
         "CREATE TABLE IF NOT EXISTS task_subjects (task_id TEXT PRIMARY KEY, subject TEXT NOT NULL)"
     )
     db.execute("CREATE INDEX IF NOT EXISTS task_subjects_subject ON task_subjects(subject)")
+    # A subject is written only with its task's INSERT, never acquired later and never for no
+    # task: the row must name the task whose INSERT is this connection's last successful one
+    # (`last_insert_rowid()`; inside this BEFORE trigger it still names the `tasks` row, as
+    # the AFTER INSERT retention trigger's own inserts revert when that trigger ends).
+    # SQLite has no transaction identity; this is the narrowest equivalent: a fresh
+    # connection, or one that inserted anything since, cannot add a subject to a stored task.
+    db.execute(
+        "CREATE TRIGGER IF NOT EXISTS task_subjects_reserved BEFORE INSERT ON task_subjects "
+        "WHEN NOT EXISTS (SELECT 1 FROM tasks WHERE id=NEW.task_id AND rowid=last_insert_rowid()) "
+        "BEGIN SELECT RAISE(ABORT, 'Task subject is written only with its task'); END"
+    )
     db.execute(
         "CREATE TRIGGER IF NOT EXISTS task_subjects_immutable BEFORE UPDATE ON task_subjects "
         "BEGIN SELECT RAISE(ABORT, 'Task subject is immutable'); END"
