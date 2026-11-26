@@ -10,22 +10,30 @@ from __future__ import annotations
 
 import argparse
 import ast
+import asyncio
+import concurrent.futures
 import inspect
 import json
 import logging
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Coroutine, Mapping
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from answerback_bridge.adapters.contracts import Submission, TaskReceipt
 from answerback_bridge.config import SCHEMAS, Config
 from answerback_bridge.plugin import PLUGIN_API, ProviderPlugin, StoreHooks, check_api_version
 from answerback_bridge.provider_config import ProviderConfig
 from answerback_bridge.tasks import TaskStore
 
 _UNKNOWN_PROVIDER = "answerback_conformance_unknown"
+_SUBJECT = "answerback-conformance-subject"
+
+# Submits one `Submission` through the provider's own adapter against `store` (with the
+# provider's fakes for its transport) and returns the receipt `submit` returned.
+SubjectProbe = Callable[[TaskStore, Submission], Coroutine[Any, Any, TaskReceipt]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +81,9 @@ class ProviderConformance:
     mcp: frozenset[str] = field(default_factory=frozenset)
     events: frozenset[str] = field(default_factory=frozenset)
     store_hooks: StoreHooksConformance | None = None
+    # A provider whose adapter reserves receipts declares one; the `subject` case checks
+    # that the receipt holds the submission's subject. None skips that case.
+    subject_probe: SubjectProbe | None = None
 
 
 def _assert_names(label: str, actual: set[str], expected: frozenset[str]) -> None:
@@ -307,6 +318,35 @@ def _config_roundtrip(
         )
 
 
+def _run_probe(probe: SubjectProbe, store: TaskStore, submission: Submission) -> TaskReceipt:
+    """Run the probe on its own loop, on a thread when the caller's loop is running."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(probe(store, submission))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(lambda: asyncio.run(probe(store, submission))).result()
+
+
+def _subject(declaration: ProviderConformance, directory: Path) -> None:
+    """A receipt holds exactly the submission's subject: S for S, none for None."""
+    probe = declaration.subject_probe
+    assert probe is not None
+    registration = declaration.factory().definition.registration
+    for label, subject in (("with", _SUBJECT), ("without", None)):
+        store = TaskStore(directory / f"{registration}-subject-{label}" / "tasks.sqlite")
+        submission = Submission("Answerback conformance", f"conformance-{label}", subject)
+        receipt = _run_probe(probe, store, submission)
+        stored = store.get(receipt.task_id)
+        assert stored["request_key"] == submission.request_id, (
+            f"provider {registration} returned a receipt for another request"
+        )
+        assert stored["subject"] == subject, (
+            f"provider {registration} stored subject {stored['subject']!r} for a submission "
+            f"{label} a subject; pass `subject=submission.subject` to `TaskStore.reserve`"
+        )
+
+
 def _string_constants(path: Path) -> list[str]:
     return [
         node.value
@@ -378,10 +418,19 @@ def check_provider_conformance(declaration: ProviderConformance, directory: Path
     _surface_names(plugin, declaration)
     _store_hooks(plugin, declaration, directory)
     _receipt_reason_drift(plugin, declaration.source_root)
+    if declaration.subject_probe is not None:
+        _subject(declaration, directory)
 
 
 ProviderConformanceRunner = Callable[[ProviderConformance], None]
-_CONFORMANCE_CASES = ("plugin-shape", "surfaces", "config", "store-hooks", "receipt-reasons")
+_CONFORMANCE_CASES = (
+    "plugin-shape",
+    "surfaces",
+    "config",
+    "store-hooks",
+    "receipt-reasons",
+    "subject",
+)
 
 
 def _check_conformance_case(case: str, declaration: ProviderConformance, directory: Path) -> None:
@@ -396,6 +445,10 @@ def _check_conformance_case(case: str, declaration: ProviderConformance, directo
         _store_hooks(plugin, declaration, directory)
     elif case == "receipt-reasons":
         _receipt_reason_drift(plugin, declaration.source_root)
+    elif case == "subject":
+        if declaration.subject_probe is None:
+            pytest.skip("no subject_probe declared; a provider that reserves receipts needs one")
+        _subject(declaration, directory)
     else:  # pragma: no cover - fixture parameters are a closed tuple
         raise AssertionError(f"Unknown provider conformance case {case!r}")
 

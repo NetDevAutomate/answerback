@@ -5,6 +5,7 @@ from .conformance import (
     ProviderConformanceRunner,
     StoreHookReconcileRefusal,
     StoreHooksConformance,
+    SubjectProbe,
     check_provider_conformance,
 )
 
@@ -13,5 +14,6 @@ __all__ = [
     "ProviderConformanceRunner",
     "StoreHookReconcileRefusal",
     "StoreHooksConformance",
+    "SubjectProbe",
     "check_provider_conformance",
 ]
