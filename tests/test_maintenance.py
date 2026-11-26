@@ -434,6 +434,26 @@ def test_crew_creation_receipts_are_known_never_pruned_and_drift_fails_closed(
     assert drifted["protected"]["unsupported_schema"] == 1
 
 
+def test_task_subjects_column_drift_fails_closed(tmp_path: Path) -> None:
+    """T-277 review: the subject side table has a known shape, so a column added to it
+    protects the store like drift in `tasks`, rather than being pruned through."""
+    from answerback_bridge.maintenance import Maintenance
+
+    store, task = fixture_task(tmp_path)
+    with store.connection() as db:
+        db.execute(
+            "INSERT INTO task_subjects(task_id, subject) VALUES (?, ?)", (task["id"], "v1.0")
+        )
+    plan = Maintenance(tmp_path / "bridge.json").plan()
+    assert [action["id"] for action in plan["actions"]] == [task["id"]]
+    assert plan["protected"].get("unsupported_schema", 0) == 0
+    with store.connection() as db:
+        db.execute("ALTER TABLE task_subjects ADD COLUMN future_reference TEXT")
+    drifted = Maintenance(tmp_path / "bridge.json").plan()
+    assert drifted["actions"] == []
+    assert drifted["protected"]["unsupported_schema"] == 1
+
+
 def test_unknown_store_columns_fail_closed_without_preview_migration(tmp_path: Path) -> None:
     from answerback_bridge.maintenance import Maintenance
 

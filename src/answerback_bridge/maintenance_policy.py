@@ -55,6 +55,7 @@ COLUMNS = {
     "crew_creation_receipts": {"request_key", "title", "project", "identity"},
     "native_sessions": {"provider", "session_id", "alias", "cwd", "profile"},
     "hc_machine_pins": {"machine", "id", "pinned"},
+    "task_subjects": {"task_id", "subject"},
     "tasks": {
         "id",
         "request_key",
