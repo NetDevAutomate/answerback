@@ -396,12 +396,33 @@ async def test_a_cancelled_admission_that_had_reserved_keeps_nothing(tmp_path: P
         await bridge.close()
 
 
-async def test_an_adapter_that_loses_the_subject_is_refused(
+async def test_an_adapter_that_reserves_in_another_store_is_refused(tmp_path: Path) -> None:
+    bridge, adapter = environment(tmp_path / "config.json")
+    other = TaskStore(tmp_path / "other.sqlite")
+    adapter.store = other
+    try:
+        with pytest.raises(
+            ValueError,
+            match="^Adapter reserved the receipt in another store, without its subject; "
+            "inspect it before sending again$",
+        ):
+            await bridge.peer_submit("fixture:one", "Review", "r1", subject=SHA)
+        # The receipt exists, unlabelled, in the store the adapter used; none in the bridge's.
+        assert other.by_request("r1")["subject"] is None
+        assert bridge.store.by_request("r1") is None
+        other.update(other.by_request("r1")["id"], "completed", result="ok")
+        with pytest.raises(ValueError, match="^Adapter returned an uncorrelated task receipt"):
+            await bridge.peer_submit("fixture:one", "Review", "r2")
+    finally:
+        await bridge.close()
+
+
+async def test_an_adapter_that_loses_the_subject_in_its_store_is_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import answerback_bridge.tasks as tasks
 
-    # As an adapter that reserves through a store the router did not register with.
+    # As an adapter whose reservation does not see the router's registration.
     monkeypatch.setattr(tasks, "admitted_subject", lambda store, key, subject: subject)
     bridge, adapter = environment(tmp_path / "config.json")
     try:

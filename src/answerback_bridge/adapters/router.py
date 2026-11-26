@@ -91,13 +91,23 @@ class AdapterRouter:
                 if not reserved:
                     keep_after_cancel(self.store.path, submission.request_id)
                 raise
-        persisted = TaskReceipt.from_record(self.store.get(returned.task_id))
+        try:
+            record = self.store.get(returned.task_id)
+        except ValueError:
+            # The adapter reserved outside this store, where no subject was registered.
+            raise ValueError(
+                "Adapter reserved the receipt in another store, without its subject; "
+                "inspect it before sending again"
+                if submission.subject is not None
+                else "Adapter returned an uncorrelated task receipt; inspect admission"
+            ) from None
+        persisted = TaskReceipt.from_record(record)
         if persisted.request_id == submission.request_id and not same_subject(
             persisted, submission
         ):
             raise ValueError(
-                "Adapter reserved the receipt without its subject (it reserved in another "
-                "store); the receipt exists without one: inspect it before sending again"
+                "Adapter reserved the receipt without its subject; the receipt exists "
+                "without one: inspect it before sending again"
                 if persisted.as_record().get("subject") is None
                 else "request_id already describes different work"
             )
