@@ -271,7 +271,23 @@ from pathlib import Path
 import answerback_example
 import pytest
 from answerback.testing.conformance import ProviderConformance
+from answerback_bridge.adapters.contracts import Peer, Submission, TaskReceipt
+from answerback_bridge.config import Config
+from answerback_bridge.plugin import kernel_context
+from answerback_bridge.tasks import TaskStore
 from answerback_example import example_plugin
+from answerback_example.adapter import ExampleAdapter
+
+
+async def example_subject_probe(store: TaskStore, submission: Submission) -> TaskReceipt:
+    """Submit through the real adapter against the given store; returns its receipt."""
+    config = Config()
+    config.select_provider("example", True)
+    adapter = ExampleAdapter(kernel_context(config, store.path.parent / "config.json", store))
+    peer = Peer.from_record(
+        {"peer_id": "example:probe", "provider": "example", "target": "probe", "project": "/"}
+    )
+    return await adapter.submit(await adapter.prepare(peer), submission, guard=lambda: None)
 
 
 @pytest.fixture
@@ -285,6 +301,7 @@ def answerback_provider_contract() -> ProviderConformance:
         mcp=frozenset(),
         events=frozenset(),
         store_hooks=None,
+        subject_probe=example_subject_probe,
     )
 ```
 
@@ -300,12 +317,14 @@ def test_example_provider_conformance(
     answerback_provider_conformance(answerback_provider_contract)
 ```
 
-A provider whose adapter reserves receipts also declares `subject_probe`: an async callable that
-takes a `TaskStore` and a `Submission`, submits it through the provider's adapter against that
-store with the provider's own fakes for its transport, and returns the receipt. The `subject` case
-runs it with a subject and without one and checks the receipt holds exactly what the submission
-carried; without a probe the case is skipped. The kernel's Kiro test shows one
-(`kiro_subject_probe`).
+A provider whose adapter reserves receipts also declares `subject_probe`, as
+`example_subject_probe` above: an async callable that takes a `TaskStore` and a `Submission`,
+submits it through the provider's adapter against that store, with the provider's own fakes for
+its transport where it sends, and returns the receipt. The `subject` case runs it with a subject
+and without one and checks that both the returned receipt and the stored row hold exactly what
+the submission carried; without a probe the case is skipped. The kernel's Kiro test shows one
+with a faked transport (`kiro_subject_probe`); `tests/test_provider_template.py` builds this
+page's package and runs all six cases against it.
 
 Declare every surface exactly, including empty surfaces. If the provider returns store hooks, pass
 `StoreHooksConformance` with provider-owned examples:

@@ -21,7 +21,8 @@ to, stay in the maintainers' private archive.
   subject differs from the submission's, or one reserved in another store, with "inspect it
   before sending again". The provider conformance fixture gains a sixth case, `subject`, run
   with a declared `subject_probe`, which checks both the receipt the provider returns and the
-  stored row. The task store gains a `task_subjects` table, added on
+  stored row; the provider template's declaration carries a minimal one, and a test builds the
+  template's package and runs all six cases against it. The task store gains a `task_subjects` table, added on
   first open, with triggers that refuse changing a stored subject, deleting it while its
   receipt exists, or adding one other than with its receipt's own insert; maintenance refuses a `task_subjects` table with unknown columns; the `tasks` table itself is
   unchanged and older receipts read `null`. Maintenance keeps a subject when it prunes a
