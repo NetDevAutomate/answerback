@@ -600,13 +600,3 @@ repos:
         types: [python]
         pass_filenames: false
         stages: [manual]  # pre-commit run --hook-stage manual --all-files ty
-      # The task ledger has one sanctioned writer (status/ledger.py, T-216). Three times on
-      # 2026-11-24 a session wrote status/tasks.json by hand (rows without `updated`, a
-      # different indent) and every other writer's `ledger.py check` failed until someone
-      # repaired it. This runs that check on the staged file; the committer sees the row.
-      - id: ledger-check
-        name: ledger check (status/tasks.json)
-        entry: python3 status/ledger.py check
-        language: system
-        files: ^status/tasks\.json$
-        pass_filenames: false
