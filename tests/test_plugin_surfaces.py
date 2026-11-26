@@ -48,6 +48,7 @@ from answerback_bridge.service import Bridge
 # provider subcommand at 80 columns with the machine-dependent `--config` default pinned.
 # The digest was recomputed for T-203 after `peer_submit` generalized binding guidance
 # from a provider-name list to the provider-neutral binding contract. Signatures did not change.
+# Recomputed for T-277: `peer_submit` and `task_list` gained the optional `subject` argument.
 TOOL_SIGNATURES_ON_MAIN = [
     "bus_submit send peer_id:string project:string message:string request_id:string "
     "ttl_seconds:integer=3600",
@@ -80,16 +81,16 @@ TOOL_SIGNATURES_ON_MAIN = [
     "task_complete write task_id:string result:string",
     'peer_search read query:string="" provider:null|string=null',
     "peer_submit send selector:string message:string request_id:string "
-    "provider:null|string=null binding:null|string=null",
+    "provider:null|string=null binding:null|string=null subject:null|string=null",
     "task_for_peer read selector:string provider:null|string=null",
-    'task_list read query:string="" limit:integer=30',
+    'task_list read query:string="" limit:integer=30 subject:null|string=null',
     "task_permissions read task_id:string",
     "task_cancel send task_id:string",
     'kiro_sessions read query:string="" cwd:null|string=null cursor:null|string=null',
     "crew_read read target:string",
 ]
 TOOL_DIGEST_ON_MAIN = (
-    "f5fd9ddd2aea9deaf671ac292aef6e6fd5d2a874b2d8ab1ed7e8f6f672aa7a22"  # pragma: allowlist secret
+    "fdce38968ab901357fa6066cb8774c7b15bd99dde80599b21b4d27352eb80f59"  # pragma: allowlist secret
 )
 # The kernel's provider subcommands; the installed plugin's own sections, top-level help and
 # MCP instructions are the plugin's fixtures (`composition.contributed`).

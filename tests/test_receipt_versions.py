@@ -41,6 +41,7 @@ AUDIT_KEYS = {
 PUBLIC_KEYS = {
     "id",
     "request_key",
+    "subject",
     "target",
     "status",
     "created",
@@ -685,6 +686,7 @@ async def test_15_views_without_metadata(tmp_path: Path) -> None:
                 "status",
                 "created",
                 "updated",
+                "subject",
                 "has_result",
                 "result_available",
                 "detail",

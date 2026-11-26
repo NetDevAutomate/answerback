@@ -476,6 +476,14 @@ async def test_a_held_repeat_is_answered_only_for_the_same_subject(
         monkeypatch.setattr(
             service, "backoff_result", lambda held, pressure: {"status": "provider_backoff"}
         )
+        reached: list[str | None] = []
+        repeated = bridge._repeated
+
+        async def spy(peer: dict, message: str, request_id: str, subject: str | None = None):
+            reached.append(subject)
+            return await repeated(peer, message, request_id, subject)
+
+        monkeypatch.setattr(bridge, "_repeated", spy)
         again = await bridge.peer_submit("fixture:one", "Review", "r1", subject=SHA)
         assert again["id"] == sent["id"] and again["subject"] == SHA
         for other in ("else", None):
@@ -483,6 +491,8 @@ async def test_a_held_repeat_is_answered_only_for_the_same_subject(
                 await bridge.peer_submit("fixture:one", "Review", "r1", subject=other)
         new = await bridge.peer_submit("fixture:one", "Review", "r2", subject=SHA)
         assert new == {"status": "provider_backoff"} and adapter.sends == 1
+        # Every repeat was answered by the held path, not by an earlier check.
+        assert reached == [SHA, "else", None, SHA]
     finally:
         await bridge.close()
 
@@ -502,27 +512,40 @@ async def test_receipts_without_a_subject_show_null(tmp_path: Path) -> None:
 def test_task_list_takes_the_newest_100_subject_matches_and_counts_all(tmp_path: Path) -> None:
     bridge = Bridge(Config(provider_selection=[]), tmp_path / "config.json")
     store = bridge.store
-    oldest, _ = store.reserve("old", "Review", "oldest", {"kind": "fixture"}, subject=SHA)
-    store.update(oldest["id"], "completed", result="ok")
-    for index in range(101):
-        row, _ = store.reserve(f"t{index}", "Review", f"m{index}", {"kind": "f"}, subject=SHA)
+    ids = []
+    for index in range(102):
+        target = "findme:old" if index == 0 else f"t{index}"
+        row, _ = store.reserve(target, "Review", f"m{index}", {"kind": "f"}, subject=SHA)
         store.update(row["id"], "completed", result="ok")
+        ids.append(row["id"])
     for index in range(100):
         row, _ = store.reserve(f"n{index}", "Noise", f"n{index}", {"kind": "f"})
         store.update(row["id"], "completed", result="ok")
+        ids.append(row["id"])
+    with store.connection() as db:
+        for created, ident in enumerate(ids, start=1):
+            db.execute("UPDATE tasks SET created=? WHERE id=?", (float(created), ident))
+    newest_first = list(reversed(ids[:102]))
     listed = bridge.task_list(limit=100, subject=SHA)
-    assert len(listed["tasks"]) == 100 and listed["subject_matches"] == 102
-    assert oldest["id"] not in {task["id"] for task in listed["tasks"]}
-    assert all(task["subject"] == SHA for task in listed["tasks"])
+    assert [task["id"] for task in listed["tasks"]] == newest_first[:100]
+    assert listed["subject_matches"] == 102
     few = bridge.task_list(limit=3, subject=SHA)
-    assert len(few["tasks"]) == 3 and few["subject_matches"] == 102
-    none = bridge.task_list("nomatch", subject=SHA)
-    assert none["tasks"] == [] and none["subject_matches"] == 102
-    # Without a subject only the latest 100 receipts are searched, so the oldest is missed.
-    assert oldest["id"] not in {task["id"] for task in bridge.task_list("oldest")["tasks"]}
-    # With one, a receipt outside the latest 100 is found.
-    store_only, total = store.by_subject(SHA, limit=100)
-    assert total == 102 and len(store_only) == 100
+    assert [task["id"] for task in few["tasks"]] == newest_first[:3]
+    assert few["subject_matches"] == 102
+    # The keyword query narrows the newest 100 subject matches; the oldest two are not among
+    # them, so a query that only the oldest matches finds nothing, and the count is unchanged.
+    old = bridge.task_list("findme", subject=SHA)
+    assert old["tasks"] == [] and old["subject_matches"] == 102
+    # Control: the same query does find that receipt when it is among the searched ones.
+    with store.connection() as db:
+        db.execute("UPDATE tasks SET created=1000 WHERE id=?", (ids[0],))
+    found = bridge.task_list("findme", subject=SHA)
+    assert [task["id"] for task in found["tasks"]] == [ids[0]]
+    # Without a subject the latest 100 receipts are searched: all noise, so none match.
+    with store.connection() as db:
+        db.execute("UPDATE tasks SET created=1 WHERE id=?", (ids[0],))
+    assert bridge.task_list("findme")["tasks"] == []
+    assert store.by_subject(SHA, limit=100)[1] == 102
 
 
 def test_an_admission_that_raises_releases_its_subject(tmp_path: Path) -> None:

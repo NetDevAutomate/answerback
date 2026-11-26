@@ -543,6 +543,7 @@ async def test_status_and_task_list_keep_their_existing_fields(rpc: Any) -> None
         "status",
         "created",
         "updated",
+        "subject",
         "detail",
         "has_result",
         "result_available",
