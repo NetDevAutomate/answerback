@@ -95,12 +95,17 @@ class AdapterRouter:
         if persisted.request_id == submission.request_id and not same_subject(
             persisted, submission
         ):
+            # A receipt this call reserved holds the wrong subject in either direction (none
+            # where one was given, or one where none was): it exists, so inspect it. A receipt
+            # that existed before the call is a repeat with another subject: different work.
+            if prior is not None and prior["id"] == persisted.task_id:
+                raise ValueError("request_id already describes different work")
             raise ValueError(
                 "Adapter reserved the receipt without its subject; the receipt exists "
                 "without one: inspect it before sending again"
                 if persisted.as_record().get("subject") is None
-                and (prior is None or prior["id"] != persisted.task_id)
-                else "request_id already describes different work"
+                else "Adapter reserved the receipt with a subject the submission did not "
+                "give; the receipt exists with it: inspect it before sending again"
             )
         if (
             persisted.target != prepared.target_key

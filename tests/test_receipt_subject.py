@@ -446,6 +446,36 @@ async def test_an_adapter_that_loses_the_subject_in_its_store_is_refused(
         await bridge.close()
 
 
+async def test_an_adapter_that_invents_a_subject_is_refused_for_inspection(
+    tmp_path: Path,
+) -> None:
+    """T-277 review 3: the inverse mismatch (a subject where none was given) on a receipt
+    this call reserved is refused with the same "inspect it" refusal, not as different work."""
+    bridge, adapter = environment(tmp_path / "config.json")
+
+    def invent(prepared: PreparedPeer, submission: Submission) -> dict:
+        row, _ = adapter.store.reserve(
+            prepared.target_key,
+            submission.message,
+            submission.request_id,
+            {"kind": adapter.name},
+            subject=submission.subject or "invented",
+        )
+        return row
+
+    adapter._reserve = invent  # type: ignore[method-assign]
+    try:
+        with pytest.raises(
+            ValueError,
+            match="^Adapter reserved the receipt with a subject the submission did not give; "
+            "the receipt exists with it: inspect it before sending again$",
+        ):
+            await bridge.peer_submit("fixture:one", "Review", "r1")
+        assert bridge.store.by_request("r1")["subject"] == "invented"
+    finally:
+        await bridge.close()
+
+
 async def test_a_subjectless_repeat_returned_by_an_adapter_is_different_work(
     tmp_path: Path,
 ) -> None:
