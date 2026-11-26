@@ -71,12 +71,11 @@ just assert-public-tree
 ```
 
 ```text
-summary: tracked=706 scanned=692 skipped_binary=14 skipped_dir=0 content_hits=2 path_hits=0 binary_hits=0 allowlisted=2 hits=0
+summary: tracked=706 scanned=692 skipped_binary=14 skipped_dir=0 content_hits=0 path_hits=0 binary_hits=0 allowlisted=0 hits=0
 ```
 
 The summary line is the report's last line; a hit would be listed above it with its file and line.
-The tree passes only at `hits=0`; the two `allowlisted` lines are the exact entries of
-`tools/public-tree-allowlist.txt`. Text that applies only to the internal provider goes into that
+The tree passes only at `hits=0`. Text that applies only to the internal provider goes into that
 package's own documentation, not fenced inside a public page.
 
 Tests pin some passages word for word. Change one only together with its test:
