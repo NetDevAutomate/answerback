@@ -100,10 +100,13 @@ You need a copy of the source tree and [`uv`](https://docs.astral.sh/uv/), which
 supported Python if you have none. The self-test needs no account, no API key and no model:
 
 ```sh
-git clone <public clone URL, set at the repo split> answerback
+git clone <repository URL> answerback
 cd answerback
 uv run --no-dev answerback self-test
 ```
+
+The repository is shared as a git clone and has no public hosting yet; `<repository URL>` is
+the address of the clone you were given.
 
 Two scripted agents hand each other a task through a throwaway bridge, both requests are sent
 again, the service restarts, and everything is deleted. That takes about five seconds once the
@@ -370,6 +373,32 @@ secret carried only in the envelope command is not implemented.
 Every other guide, by what you are trying to do, is in the [documentation map](docs/README.md);
 terms are in the [glossary](docs/GLOSSARY.md), and what changed in each version is in
 [CHANGELOG.md](CHANGELOG.md).
+
+## Install from a clone
+
+The kernel alone owns the `answerback` console script. Installed as a tool from a clone at
+`~/code/personal/tools/answerback`, the public composition is:
+
+```sh
+uv tool install --force --editable ~/code/personal/tools/answerback[bus]
+answerback --version          # 0.16.1
+answerback providers list     # the kernel's own providers
+```
+
+A provider plugin kept in a repository of its own is installed in the same command, from its
+clone beside this one, and adds its provider to the list:
+
+```sh
+uv tool install --force --editable ~/code/personal/tools/answerback[bus] \
+  --with-editable ~/code/personal/tools/<plugin-repository>/packages/<provider-plugin>
+answerback --version          # 0.16.1
+answerback providers list     # includes the plugin's provider on this composition
+```
+
+zsh reads `[bus]` as a file pattern; there, quote the extra alone
+(`~/code/personal/tools/answerback'[bus]'`). Each `uv tool install` replaces the earlier set, so
+name every extra and plugin in one command.
+[MIGRATION.md](MIGRATION.md) says how an installation of the combined 0.16.0 tree moves to these.
 
 ## Development
 

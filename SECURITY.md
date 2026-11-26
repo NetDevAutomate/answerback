@@ -12,9 +12,8 @@ Security reviewers and people deciding where to run Answerback start here. Insta
 ## Reporting a problem
 
 There is no package on PyPI yet and no public issue tracker yet. Report a suspected
-vulnerability privately to the maintainer, Andy Taylor, at the repository you cloned from
-(`<public clone URL, set at the repo split>`), not in a public issue or change. Do not include
-secrets, prompts or task results in a report.
+vulnerability privately to the maintainer named in [README.md](README.md), Andy Taylor, not in a
+public issue or change. Do not include secrets, prompts or task results in a report.
 
 ## What listens
 
