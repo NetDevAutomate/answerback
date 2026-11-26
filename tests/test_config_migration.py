@@ -13,12 +13,12 @@ same configs with the installed plugin's block are the plugin's own fixtures and
 
 import json
 import logging
-from dataclasses import fields, replace
+from dataclasses import asdict, fields, replace
 from pathlib import Path
 from typing import Any
 
 import pytest
-from composition import pick
+from composition import PLUGIN_PROVIDERS, pick
 
 from answerback_bridge.adapters.builtins import builtin_plugins
 from answerback_bridge.config import (
@@ -375,6 +375,80 @@ def test_flat_keys_of_a_selected_unclaimed_provider_load_into_its_kept_block(
     assert not set(flat) & set(saved)
     assert saved["providers"][UNCLAIMED] == config.unknown_providers[UNCLAIMED]
     assert Config.load(path).unknown_providers[UNCLAIMED] == config.unknown_providers[UNCLAIMED]
+
+
+def test_an_installed_plugins_flat_keys_are_claimed_by_its_schema_first(
+    tmp_path: Path, warnings: pytest.LogCaptureFixture
+) -> None:
+    """With a plugin installed its schema's `flat_keys()` claims `<plugin>_<field>`, so the
+    same flat file fills the plugin's own block, never `unknown_providers`. The public
+    composition has no plugin: every flat key is a kernel provider's."""
+    if not PLUGIN_PROVIDERS:
+        assert {provider for provider, _ in FLAT_KEYS.values()} <= set(SCHEMAS)
+        return
+    (plugin,) = PLUGIN_PROVIDERS
+    claimed = {key: name for key, (provider, name) in FLAT_KEYS.items() if provider == plugin}
+    assert claimed
+    defaults = asdict(SCHEMAS[plugin]())
+    flat = {key: defaults[name] for key, name in claimed.items()}
+    config = Config.load(write(tmp_path, {"provider_selection": ["kiro", plugin], **flat}))
+    assert warnings.records == []
+    assert plugin not in config.unknown_providers
+    assert config.registered_providers() == [name for name in PROVIDERS if name in {"kiro", plugin}]
+    assert {name: getattr(config.providers[plugin], name) for name in claimed.values()} == {
+        name: defaults[name] for name in claimed.values()
+    }
+
+
+def test_a_nested_value_shadows_an_unclaimed_providers_flat_key(
+    tmp_path: Path, warnings: pytest.LogCaptureFixture
+) -> None:
+    path = write(
+        tmp_path,
+        {
+            "provider_selection": [UNCLAIMED],
+            f"{UNCLAIMED}_binary": "/flat",
+            f"{UNCLAIMED}_home": "/flat-home",
+            "providers": {UNCLAIMED: {"binary": "/nested"}},
+        },
+    )
+    config = Config.load(path)
+    assert config.unknown_providers[UNCLAIMED] == {"binary": "/nested", "home": "/flat-home"}
+    assert [record.getMessage() for record in warnings.records][0] == (
+        f"Bridge config at {path} sets both flat and nested values for {UNCLAIMED}_binary; "
+        "the nested values under 'providers' win and the flat keys are ignored"
+    )
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        # The prefix names no provider the file selects: a mistyped key, still refused.
+        {f"{UNCLAIMED}_binary": "/x"},
+        {"provider_selection": ["kiro"], f"{UNCLAIMED}_binary": "/x"},
+        # A nested block alone does not make its provider's flat keys readable.
+        {"providers": {UNCLAIMED: {}}, f"{UNCLAIMED}_binary": "/x"},
+        # A loaded provider's prefix with a field its schema does not claim.
+        {"provider_selection": ["kiro"], "kiro_binray": "/x"},
+        # The bare prefix with no field name.
+        {"provider_selection": [UNCLAIMED], f"{UNCLAIMED}_": "/x"},
+    ],
+)
+def test_a_flat_key_of_no_selected_unclaimed_provider_is_still_refused(
+    tmp_path: Path, document: dict[str, Any]
+) -> None:
+    (key,) = [key for key in document if key not in {"provider_selection", "providers"}]
+    with pytest.raises(ValueError, match="incompatible with this version") as info:
+        Config.load(write(tmp_path, document))
+    assert repr(key) in str(info.value)
+
+
+def test_a_kernel_field_is_never_read_as_an_unclaimed_providers_field(tmp_path: Path) -> None:
+    config = Config.load(
+        write(tmp_path, {"provider_selection": ["heartbeat"], "heartbeat_interval": 7})
+    )
+    assert config.heartbeat_interval == 7
+    assert config.unknown_providers == {}
 
 
 def test_select_provider_keeps_unknown_names_but_refuses_to_select_one() -> None:
