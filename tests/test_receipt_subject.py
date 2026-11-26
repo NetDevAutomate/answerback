@@ -4,6 +4,7 @@ import asyncio
 import sqlite3
 import threading
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -613,7 +614,9 @@ async def test_a_held_repeat_is_answered_only_for_the_same_subject(
         reached: list[str | None] = []
         repeated = bridge._repeated
 
-        async def spy(peer: dict, message: str, request_id: str, subject: str | None = None):
+        async def spy(
+            peer: dict, message: str, request_id: str, subject: str | None = None
+        ) -> dict[str, Any]:
             reached.append(subject)
             return await repeated(peer, message, request_id, subject)
 
