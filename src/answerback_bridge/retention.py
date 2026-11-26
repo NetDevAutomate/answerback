@@ -86,7 +86,7 @@ def migrate_subjects(db: sqlite3.Connection) -> None:
     A table rather than a `tasks` column, so the `tasks` columns that positional inserts and
     maintenance's schema check rely on are unchanged. A row is created only by its task's
     INSERT, from a marker staged before that INSERT, never added later, updated or deleted
-    on its own, and removed with its task.
+    on its own, and removed with its task. A task's id cannot change.
     """
     # `WITHOUT ROWID`: no rule below reads a rowid. A store from before this round keeps its
     # rowid table; the marker triggers do not depend on which kind it is.
@@ -116,9 +116,19 @@ def migrate_subjects(db: sqlite3.Connection) -> None:
     # Round 3's rule compared the task's rowid with `last_insert_rowid()`, which the subject
     # INSERT itself resets, so a later transaction on that connection could pass it (review 4).
     db.execute("DROP TRIGGER IF EXISTS task_subjects_reserved")
-    # A subject row needs both its task and its marker. A marker exists for a stored task
-    # only between that task's INSERT and the end of `task_subjects_created`, so this trigger
-    # admits only the row `task_subjects_created` writes.
+    # A task id is its receipt's identity and no API changes it. Fixing it also keeps a
+    # stored task from being renamed onto a committed marker, which would otherwise make a
+    # task and its marker exist together outside its INSERT (review 5), and keeps subject
+    # and retention rows from being detached from their task.
+    db.execute(
+        "CREATE TRIGGER IF NOT EXISTS task_id_fixed BEFORE UPDATE OF id ON tasks "
+        "WHEN NEW.id IS NOT OLD.id "
+        "BEGIN SELECT RAISE(ABORT, 'Task id is immutable'); END"
+    )
+    # A subject row needs both its task and its marker. A marker can be staged only for an
+    # unused id, cannot be renamed, and a task cannot be renamed onto it, so a marker exists
+    # for a stored task only between that task's INSERT and the end of
+    # `task_subjects_created`: this trigger admits only the row `task_subjects_created` writes.
     db.execute(
         "CREATE TRIGGER IF NOT EXISTS task_subjects_staged BEFORE INSERT ON task_subjects "
         "WHEN NOT EXISTS (SELECT 1 FROM tasks WHERE id=NEW.task_id) "

@@ -218,6 +218,7 @@ def test_an_old_store_gains_the_subject_table_and_keeps_its_task_columns(tmp_pat
         db.execute("DROP TRIGGER task_subjects_deleted")
         db.execute("DROP TRIGGER task_subjects_kept")
         db.execute("DROP TRIGGER task_subjects_created")
+        db.execute("DROP TRIGGER task_id_fixed")
         db.execute("DROP TABLE task_subjects")
         db.execute("DROP TABLE task_subject_pending")
         # A positional insert of the eleven task columns, as older code wrote them.
@@ -236,6 +237,7 @@ def test_an_old_store_gains_the_subject_table_and_keeps_its_task_columns(tmp_pat
     assert {"task_subjects", "task_subjects_subject", "task_subjects_immutable"} <= names
     assert {"task_subjects_deleted", "task_subjects_kept", "task_subjects_staged"} <= names
     assert {"task_subject_pending", "task_subject_pending_new", "task_subjects_created"} <= names
+    assert "task_id_fixed" in names
     TaskStore(path)  # a second open migrates nothing and does not fail
 
 
@@ -340,6 +342,37 @@ def test_a_marker_for_an_existing_task_is_refused(tmp_path: Path) -> None:
             db.execute("INSERT INTO task_subject_pending (task_id, subject) VALUES ('y', 's')")
             db.execute("INSERT INTO task_subjects (task_id, subject) VALUES ('y', 's')")
     assert store.get(plain["id"])["subject"] is None
+
+
+def test_a_task_cannot_be_renamed_onto_a_committed_marker(tmp_path: Path) -> None:
+    """T-277 review 5: renaming a subjectless task onto a marker committed for an unused id
+    made both exist outside the task's INSERT, so a direct subject insert passed. Each step
+    is its own committed transaction, as in the review's probe."""
+    store = TaskStore(tmp_path / "tasks.sqlite")
+    plain, _ = store.reserve("a", "Review", "plain", {"kind": "fixture"})
+    with store.connection() as db:
+        db.execute(
+            "INSERT INTO task_subject_pending (task_id, subject) "
+            "VALUES ('renamed-task-id', 'direct-late')"
+        )
+    with pytest.raises(sqlite3.IntegrityError, match="Task id is immutable"):
+        with store.connection() as db:
+            db.execute("UPDATE tasks SET id='renamed-task-id' WHERE id=?", (plain["id"],))
+    with pytest.raises(sqlite3.IntegrityError, match="written only with its task"):
+        with store.connection() as db:
+            db.execute(
+                "INSERT INTO task_subjects (task_id, subject) "
+                "VALUES ('renamed-task-id', 'direct-late')"
+            )
+    assert store.get(plain["id"])["subject"] is None
+    with sqlite3.connect(store.path) as db:
+        renamed = db.execute("SELECT count(*) FROM tasks WHERE id='renamed-task-id'").fetchone()
+    db.close()
+    assert renamed == (0,)
+    assert store.by_subject("direct-late") == ([], 0)
+    # Rewriting the id to itself, as a whole-row update would, is not a change.
+    with store.connection() as db:
+        db.execute("UPDATE tasks SET id=id WHERE id=?", (plain["id"],))
 
 
 def test_the_reservation_consumes_its_marker(tmp_path: Path) -> None:
