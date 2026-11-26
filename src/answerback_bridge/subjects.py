@@ -16,6 +16,12 @@ SUBJECT_REFUSAL = (
 # for the process rather than a context, so an adapter that reserves on a thread still does.
 # Each entry holds the subject and the number of admissions of that request ID now running.
 _ADMITTING: dict[tuple[str, str], tuple[str | None, int]] = {}
+# The subjects of cancelled admissions that had not reserved yet. Cancelling the await does
+# not stop an adapter's thread or executor job, which may still reserve; it takes the subject
+# from here until a reservation of that request ID settles it. Oldest first, at most
+# `MAX_KEPT`; a cancelled admission whose work never reserves keeps its entry until evicted.
+_KEPT: dict[tuple[str, str], str | None] = {}
+MAX_KEPT = 1024
 _LOCK = threading.Lock()
 
 
@@ -50,11 +56,14 @@ def admission_subject(store: Path, request_key: str, subject: str | None) -> Ite
     with. A second admission of the same request ID with another subject, while this one
     runs, is refused as different work; with the same subject it proceeds and the store's
     own repeat rule answers it. Overlapping admissions are counted, so the registration
-    lasts until the last of them ends, whatever order they end in.
+    lasts until the last of them ends, whatever order they end in. A subject kept after a
+    cancelled admission (`keep_after_cancel`) is held to the same rule.
     """
     subject = validate_subject(subject)
     key = _key(store, request_key)
     with _LOCK:
+        if key in _KEPT and _KEPT[key] != subject:
+            raise ValueError("request_id already describes different work")
         if key in _ADMITTING:
             held, count = _ADMITTING[key]
             if held != subject:
@@ -73,6 +82,29 @@ def admission_subject(store: Path, request_key: str, subject: str | None) -> Ite
                 _ADMITTING[key] = (held, count - 1)
 
 
+def keep_after_cancel(store: Path, request_key: str) -> None:
+    """Keep the running admission's subject for `request_key` after it is cancelled.
+
+    Call it while the admission is still registered. The adapter's thread or executor job
+    may reserve later; it still takes this subject, until `settled` drops the entry.
+    """
+    key = _key(store, request_key)
+    with _LOCK:
+        if key not in _ADMITTING:
+            return
+        _KEPT.pop(key, None)
+        _KEPT[key] = _ADMITTING[key][0]
+        while len(_KEPT) > MAX_KEPT:
+            del _KEPT[next(iter(_KEPT))]
+
+
+def settled(store: Path, request_key: str) -> None:
+    """A receipt for `request_key` exists now: a kept subject is no longer needed."""
+    key = _key(store, request_key)
+    with _LOCK:
+        _KEPT.pop(key, None)
+
+
 def admitted_subject(store: Path, request_key: str, subject: str | None) -> str | None:
     """The subject a reservation of `request_key` stores: explicit, or the admission's.
 
@@ -82,9 +114,12 @@ def admitted_subject(store: Path, request_key: str, subject: str | None) -> str 
     subject = validate_subject(subject)
     key = _key(store, request_key)
     with _LOCK:
-        if key not in _ADMITTING:
+        if key in _ADMITTING:
+            admitted = _ADMITTING[key][0]
+        elif key in _KEPT:
+            admitted = _KEPT[key]
+        else:
             return subject
-        admitted = _ADMITTING[key][0]
     if subject is not None and subject != admitted:
         raise ValueError("subject conflicts with the admission subject")
     return admitted

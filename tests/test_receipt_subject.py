@@ -35,6 +35,10 @@ class SubjectAdapter(StoredAdapter):
     sends = 0
     reserve_in_thread = False
     background_request: str | None = None
+    # When set, reserve on an executor thread that waits for `release` first.
+    release: threading.Event | None = None
+    waiting = threading.Event()
+    finished = threading.Event()
 
     def enabled(self) -> bool:
         return True
@@ -68,7 +72,19 @@ class SubjectAdapter(StoredAdapter):
         self, prepared: PreparedPeer, submission: Submission, *, guard: Guard
     ) -> TaskReceipt:
         guard()
-        if self.reserve_in_thread:
+        if self.release is not None:
+            release = self.release
+
+            def held() -> dict:
+                self.waiting.set()
+                try:
+                    release.wait(5)
+                    return self._reserve(prepared, submission)
+                finally:
+                    self.finished.set()
+
+            row = await asyncio.to_thread(held)
+        elif self.reserve_in_thread:
             box: list[dict] = []
             thread = threading.Thread(
                 target=lambda: box.append(self._reserve(prepared, submission))
@@ -312,6 +328,70 @@ async def test_an_adapter_that_reserves_on_a_thread_keeps_the_subject(tmp_path: 
     try:
         sent = await bridge.peer_submit("fixture:one", "Review", "r1", subject=SHA)
         assert sent["subject"] == SHA
+    finally:
+        await bridge.close()
+
+
+async def run_cancelled(bridge: Bridge, adapter: SubjectAdapter) -> None:
+    """Cancel an admission while its executor job waits to reserve, then let it reserve."""
+    adapter.release, adapter.waiting = threading.Event(), threading.Event()
+    adapter.finished = threading.Event()
+    sending = asyncio.create_task(bridge.peer_submit("fixture:one", "Review", "r1", subject=SHA))
+    assert await asyncio.to_thread(adapter.waiting.wait, 5)
+    sending.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await sending
+    adapter.release.set()
+    assert await asyncio.to_thread(adapter.finished.wait, 5)
+
+
+async def test_an_executor_job_that_outlives_a_cancelled_admission_keeps_the_subject(
+    tmp_path: Path,
+) -> None:
+    import answerback_bridge.subjects as subjects
+
+    bridge, adapter = environment(tmp_path / "config.json")
+    try:
+        await run_cancelled(bridge, adapter)
+        # The reviewer's harness printed `cancelled-thread-subject None` here.
+        assert bridge.store.by_request("r1")["subject"] == SHA
+        # The reservation settled the kept subject; the store's own rule answers from here.
+        assert not subjects._KEPT
+        adapter.release = None
+        with pytest.raises(ValueError, match=DIFFERENT):
+            await bridge.peer_submit("fixture:one", "Review", "r1", subject="else")
+    finally:
+        await bridge.close()
+
+
+async def test_a_cancelled_admission_keeps_its_subject_against_another(tmp_path: Path) -> None:
+    import answerback_bridge.subjects as subjects
+
+    path = tmp_path / "tasks.sqlite"
+    with admission_subject(path, "r1", SHA):
+        subjects.keep_after_cancel(path, "r1")
+    try:
+        with pytest.raises(ValueError, match=DIFFERENT):
+            with admission_subject(path, "r1", None):
+                pass
+        assert (
+            TaskStore(path).reserve("t", "Review", "r1", {"kind": "fixture"})[0]["subject"] == SHA
+        )
+        assert not subjects._KEPT
+    finally:
+        subjects.settled(path, "r1")
+
+
+async def test_a_cancelled_admission_that_had_reserved_keeps_nothing(tmp_path: Path) -> None:
+    import answerback_bridge.subjects as subjects
+
+    bridge, adapter = environment(tmp_path / "config.json")
+    try:
+        # The receipt exists before the cancellation: the store's stored subject decides.
+        bridge.store.reserve("fixture:one", "Review", "r1", {"kind": "fixture"}, subject=SHA)
+        await run_cancelled(bridge, adapter)
+        assert not subjects._KEPT
+        assert bridge.store.by_request("r1")["subject"] == SHA
     finally:
         await bridge.close()
 
