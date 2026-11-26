@@ -10,7 +10,10 @@ from routing_fakes import FIXTURE, PROJECT, policy
 
 from answerback_bridge.routing.policy import PolicyError, classify, load_policy, parse_policy
 
-REPO_POLICY = Path(__file__).parent.parent / "status" / "routing.json"
+# The maintainers' own policy file (`status/routing.json` of the combined repository, now in
+# their private archive) with its project path, launcher path and space neutralised and its
+# host, credential and ruling notes left out (T-271).
+REPO_POLICY = Path(__file__).parent / "fixtures" / "repository-routing-policy.json"
 
 
 def raw() -> dict:
@@ -46,7 +49,6 @@ def test_only_a_harness_marked_direct_skips_the_launch_script() -> None:
     assert parse_policy(raw()).harnesses["crew"].launch == ()
 
 
-@pytest.mark.skipif(not REPO_POLICY.exists(), reason="status/routing.json is not in this tree")
 def test_the_repository_policy_loads() -> None:
     loaded = load_policy(REPO_POLICY)
     assert loaded.classes and any(h.creatable for h in loaded.harnesses.values())
@@ -243,7 +245,6 @@ def test_lifecycle_text_the_code_does_not_act_on_is_listed() -> None:
     assert parse_policy(raw()).unenforced == ()
 
 
-@pytest.mark.skipif(not REPO_POLICY.exists(), reason="status/routing.json is not in this tree")
 def test_the_repository_policy_caps_gates() -> None:
     loaded = load_policy(REPO_POLICY)
     assert loaded.max_concurrent_gates == 1 and loaded.gate_classes
@@ -286,9 +287,8 @@ def test_legacy_launcher_is_normalized_to_the_installed_resource(tmp_path: Path)
     expected = Path(str(files("answerback_bridge").joinpath("data", "harness_launch.sh")))
     assert loaded.harnesses["claude"].launch[0] == str(expected.resolve())
     assert expected.is_file() and expected.stat().st_mode & 0o111
-    assert (
-        expected.read_bytes() == (REPO_POLICY.parents[1] / "tools/harness_launch.sh").read_bytes()
-    )
+    source = Path(__file__).parents[1] / "tools/harness_launch.sh"
+    assert expected.read_bytes() == source.read_bytes()
 
 
 def test_relocated_repository_policy_keeps_reviewed_launch_flags(tmp_path: Path) -> None:

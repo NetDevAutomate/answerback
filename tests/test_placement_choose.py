@@ -22,7 +22,10 @@ from answerback_bridge.placement.assess import assess, rank
 from answerback_bridge.placement.probe import Reading, parse_reading
 
 FIXTURES = Path(__file__).parent / "fixtures/placement"
-REPO_POLICY = Path(__file__).parent.parent / "status" / "routing.json"
+# The maintainers' own policy file (`status/routing.json` of the combined repository, now in
+# their private archive) with its project path, launcher path and space neutralised and its
+# host, credential and ruling notes left out (T-271).
+REPO_POLICY = Path(__file__).parent / "fixtures" / "repository-routing-policy.json"
 NOW = 1000.0
 NODES = ("node-a", "node-b", "node-c")
 READY = {"codex": {"ready": True}}

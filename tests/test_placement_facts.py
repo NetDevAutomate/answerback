@@ -19,10 +19,13 @@ import pytest
 from answerback_bridge.placement.assess import Thresholds
 from answerback_bridge.routing.policy import load_policy, parse_policy
 
-REPO_POLICY = Path(__file__).parent.parent / "status" / "routing.json"
+# The maintainers' own policy file (`status/routing.json` of the combined repository, now in
+# their private archive) with its project path, launcher path and space neutralised and its
+# host, credential and ruling notes left out (T-271).
+REPO_POLICY = Path(__file__).parent / "fixtures" / "repository-routing-policy.json"
 
 # The form of the block is new with this row (no file holds one yet): every key the reader
-# takes, around the repository's own policy file, which `policy()` reads from disk.
+# takes, around the maintainers' policy file, which `policy()` reads from disk.
 BLOCK: dict[str, Any] = {
     "order": ["node-b", "node-a"],
     "thresholds": {"cpu_busy": 0.6},
@@ -44,7 +47,7 @@ BLOCK: dict[str, Any] = {
 
 
 def policy(block: Any = ...) -> dict[str, Any]:
-    """The repository's own policy file, optionally with a placement block."""
+    """The maintainers' policy file, optionally with a placement block."""
     raw = json.loads(REPO_POLICY.read_text())
     assert "placement" not in raw
     if block is not ...:

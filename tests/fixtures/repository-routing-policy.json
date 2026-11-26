@@ -1,0 +1,201 @@
+{
+  "version": 1,
+  "project": "/work/answerback",
+  "harnesses": {
+    "claude": {
+      "provider": "hc",
+      "agent_kind": "claude",
+      "launch": [
+        "/work/answerback/tools/harness_launch.sh",
+        "claude",
+        "--dangerously-skip-permissions"
+      ],
+      "accepts_initial_prompt": false,
+      "model": "global.anthropic.claude-fable-5-2[1m]",
+      "model_source": "~/.claude/settings.json ANTHROPIC_MODEL",
+      "max_workers": 2,
+      "surface": "claude-code-cli",
+      "transcript_entrypoint": "cli"
+    },
+    "codex": {
+      "provider": "hc",
+      "agent_kind": "codex",
+      "launch": [
+        "/work/answerback/tools/harness_launch.sh",
+        "codex",
+        "--yolo",
+        "--no-daemon"
+      ],
+      "accepts_initial_prompt": false,
+      "model": "global.openai.gpt-6-astra",
+      "model_source": "~/.codex/config.toml model, model_reasoning_effort=xhigh",
+      "max_workers": 2,
+      "surface": "codex-cli",
+      "rollout_originator": "codex-tui",
+      "launch_note": "--no-daemon is required for hc-managed Codex: otherwise the TUI routes turns through a long-lived `codex app-server` daemon that kept the environment it started with (no AWS_BEARER_TOKEN_BEDROCK), giving 401 \"security token included in the request is invalid\" (2026-11-18)."
+    },
+    "grok": {
+      "provider": "hc",
+      "agent_kind": "grok",
+      "launch": [
+        "/work/answerback/tools/harness_launch.sh",
+        "grok",
+        "--yolo"
+      ],
+      "accepts_initial_prompt": false,
+      "model": "harness default (Bedrock via ~/.grok/config.toml)",
+      "max_workers": 2
+    },
+    "kiro": {
+      "provider": "hc",
+      "agent_kind": "kiro",
+      "launch": [
+        "kiro-cli",
+        "chat",
+        "-a",
+        "--v3",
+        "--agent=default"
+      ],
+      "accepts_initial_prompt": false,
+      "model": "harness default",
+      "max_workers": 2,
+      "launch_via": "direct"
+    },
+    "crew": {
+      "provider": "crew",
+      "agent": "kirocrew-worker",
+      "created_by": "conductor",
+      "max_workers": 2
+    }
+  },
+  "classes": {
+    "design-impl": {
+      "primary": "claude",
+      "fallback": [
+        "codex"
+      ],
+      "match": [
+        "new module",
+        "protocol",
+        "schema",
+        "endpoint",
+        "across files"
+      ]
+    },
+    "port-fix": {
+      "primary": "codex",
+      "fallback": [
+        "claude"
+      ],
+      "match": [
+        "port",
+        "refactor",
+        "bugfix",
+        "one test per",
+        "exit code",
+        "timeout"
+      ]
+    },
+    "analysis": {
+      "primary": "grok",
+      "fallback": [
+        "claude"
+      ],
+      "match": [
+        "read-only",
+        "report",
+        "review the repo",
+        "research",
+        "compare",
+        "git log",
+        "cherry"
+      ]
+    },
+    "ledger-docs": {
+      "primary": "kiro",
+      "fallback": [
+        "crew"
+      ],
+      "match": [
+        "status/",
+        "hand-off",
+        "docs",
+        "changelog",
+        "STATUS.md"
+      ]
+    },
+    "review": {
+      "primary": "not-author",
+      "fallback": [
+        "council-litellm"
+      ],
+      "match": [
+        "review branch",
+        "second opinion",
+        "security read"
+      ]
+    },
+    "release-apply": {
+      "primary": "conductor",
+      "fallback": [],
+      "match": [
+        "merge",
+        "tag",
+        "install",
+        "apply-queue"
+      ]
+    },
+    "attended": {
+      "primary": "owner",
+      "fallback": [],
+      "match": [
+        "permission-answer",
+        "push",
+        "attended"
+      ]
+    }
+  },
+  "tie_breaks": [
+    "existing_idle_peer_same_project",
+    "not_author_of_touched_files",
+    "cheaper_seat"
+  ],
+  "lifecycle": {
+    "name_pattern": "{class}-{harness}-{yymmdd}-{n}",
+    "prime_text": null,
+    "prime_timeout_s": 120,
+    "request_id_pattern": "ab-{yyyymmdd}-{task}-{lane}-{address}",
+    "teardown_after": "handoff_merged_or_rejected",
+    "keep_idle_min": 20,
+    "warm_pool": {
+      "port-fix": 1
+    },
+    "max_total": 6,
+    "never_kill": [
+      "state=working",
+      "receipt in pending|submitted",
+      "owner-opened (always on, not read from this file: no registry row, unless bare, pattern-named and in the project)"
+    ],
+    "hung_action": "kill, re-route once to fallback with new request id, then blocked + decision file",
+    "prime": "none until T-13: launch with no initial prompt so the harness sits idle; the bridge assignment is the first turn. A primed worker reports done and is unaddressable.",
+    "make_visible": "after hc run: herdr-app do terminal.keep --terminal <t> --place tab (proven 2026-11-17 on t5q: it lands in the window's selected space, so verify labels herdr.space == project_space after; T-18 should use herdr-app do tab.new --space <project_space> --argv <launch> instead)",
+    "max_concurrent_gates": 1,
+    "gate_note": "2026-11-17 18:1x: the work Mac froze with swap 59.1 of 60 GB used and load 26-35 while three workers and the conductor's round-2 verifiers each ran a full `just check` (~2100 tests, ~270 s) in parallel. Run at most one full gate at a time across workers; others run targeted pytest for their files and queue the full gate.",
+    "gate_classes": [
+      "design-impl",
+      "port-fix"
+    ]
+  },
+  "project_space": "spcproject",
+  "surfaces": {
+    "doc": "Dispatch surfaces that are not hc worker pools (T-32). Not parsed by routing.policy; kept out of `harnesses`, whose entries must be launchable worker pools.",
+    "codex-desktop": {
+      "provider": "codex",
+      "surface": "codex-desktop",
+      "rollout_originator": "codex_work_desktop",
+      "dispatch": "desktop_submit only; never hc",
+      "created_by": "owner (desktop app)",
+      "note": "shares ~/.codex/sessions with codex-cli; filter by originator (T-32)"
+    }
+  }
+}

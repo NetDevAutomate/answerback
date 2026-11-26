@@ -2,7 +2,6 @@
 
 import re
 import time
-from pathlib import Path
 
 import pytest
 
@@ -15,7 +14,6 @@ from answerback_bridge.pressure import (
 )
 from answerback_bridge.pressure.signatures import LINE_CHARS, line_digest
 
-BRIEFS = Path(__file__).resolve().parents[1] / "status" / "handoff" / "briefs"
 KIRO_LIMITER = (
     "You're sending requests faster than your rate limit allows. Please wait a moment "
     "and try again, or run fewer sessions at the same time."
@@ -76,16 +74,6 @@ def test_every_signature_in_the_table_has_a_fixture() -> None:
 @pytest.mark.parametrize("harness", ["kiro", "claude", "codex", "grok", "crew", "unknown"])
 def test_test_summaries_code_and_prose_never_match(line: str, harness: str) -> None:
     assert keys(line, harness) == []
-
-
-def test_no_line_of_a_brief_matches_when_the_brief_is_excluded() -> None:
-    for name in ("lane-detect.md", "shared.md", "lane-gate.md"):
-        path = BRIEFS / "T-227" / name
-        if not path.exists():
-            continue
-        brief = path.read_text()
-        assert keys(brief, "kiro", exclude=brief) == []
-        assert keys(brief, "codex", exclude=brief) == []
 
 
 def test_exclude_drops_the_brief_line_and_only_that_line() -> None:
