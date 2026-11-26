@@ -14,7 +14,15 @@ from . import receipt_version
 from .adapters.catalog import definition, definitions
 from .digests import canonical
 from .errors import AdmissionRefused
-from .retention import content_matches, decode_task, matches_work, migrate_tasks, read_record
+from .retention import (
+    content_matches,
+    decode_task,
+    matches_work,
+    migrate_subjects,
+    migrate_tasks,
+    read_record,
+)
+from .subjects import SUBJECT_REFUSAL, admitted_subject, validate_subject
 
 if TYPE_CHECKING:
     from .plugin import StoreHooks
@@ -165,6 +173,7 @@ class TaskStore:
                 "machine TEXT PRIMARY KEY, id TEXT NOT NULL, pinned REAL NOT NULL)"
             )
             migrate_tasks(db)
+            migrate_subjects(db)
         path.chmod(0o600)
 
     @contextmanager
@@ -232,10 +241,14 @@ class TaskStore:
         message: str,
         request_key: str,
         metadata: dict[str, Any] | None = None,
+        *,
+        subject: str | None = None,
     ) -> tuple[Task, bool]:
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
-            return self.reserve_in_transaction(db, target, message, request_key, metadata)
+            return self.reserve_in_transaction(
+                db, target, message, request_key, metadata, subject=subject
+            )
 
     def reserve_in_transaction(
         self,
@@ -246,8 +259,13 @@ class TaskStore:
         metadata: dict[str, Any] | None = None,
         *,
         initial_state: str = "pending",
+        subject: str | None = None,
     ) -> tuple[Task, bool]:
-        """Reserve in the caller's begun transaction; never commit independently."""
+        """Reserve in the caller's begun transaction; never commit independently.
+
+        `subject` is stored on a new receipt; without it, the subject `admission_subject`
+        set for this request ID is. A repeat with another subject is different work.
+        """
         if not db.in_transaction:
             raise ValueError("Task reservation requires a begun transaction")
         if initial_state not in ("pending", "queued"):
@@ -258,10 +276,13 @@ class TaskStore:
             raise ValueError("Message must contain 1–100000 characters")
         if receipt_version.names_key(metadata):
             raise ValueError(receipt_version.REFUSAL)
+        subject = admitted_subject(self.path, request_key, subject)
         existing = db.execute("SELECT * FROM tasks WHERE request_key=?", (request_key,)).fetchone()
         if existing:
             task = self.decode(existing, db)
-            if not matches_work(task, target, message, request_key, (metadata or {}).get("kind")):
+            if not matches_work(
+                task, target, message, request_key, (metadata or {}).get("kind"), subject=subject
+            ):
                 raise ValueError("request_id already describes different work")
             return task, False
         busy = db.execute(
@@ -291,6 +312,10 @@ class TaskStore:
                 json.dumps(stored),
             ),
         )
+        if subject is not None:
+            db.execute(
+                "INSERT INTO task_subjects (task_id, subject) VALUES (?, ?)", (task_id, subject)
+            )
         row = db.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
         assert row is not None
         return self.decode(row, db), True
@@ -856,6 +881,28 @@ class TaskStore:
                 "SELECT * FROM tasks ORDER BY created DESC LIMIT ?", (limit,)
             ).fetchall()
             return [self.decode(row, db) for row in rows]
+
+    def by_subject(self, subject: str, *, limit: int = 100) -> tuple[list[Task], int]:
+        """Receipts with exactly this subject, newest first, from the whole store.
+
+        Returns at most `limit` receipts and the count of all receipts with the subject.
+        """
+        subject = validate_subject(subject)
+        if subject is None:
+            raise ValueError(SUBJECT_REFUSAL)
+        if not 1 <= limit <= 100:
+            raise ValueError("limit must be between 1 and 100")
+        with self.connection() as db:
+            db.execute("BEGIN")
+            total = db.execute(
+                "SELECT COUNT(*) FROM task_subjects WHERE subject=?", (subject,)
+            ).fetchone()
+            rows = db.execute(
+                "SELECT tasks.* FROM task_subjects JOIN tasks ON tasks.id=task_subjects.task_id "
+                "WHERE task_subjects.subject=? ORDER BY tasks.created DESC, tasks.id LIMIT ?",
+                (subject, limit),
+            ).fetchall()
+            return [self.decode(row, db) for row in rows], total[0]
 
     def complete_herdr(self, task_id: str, result: str) -> Task:
         """Compatibility alias for the original Python companion API."""

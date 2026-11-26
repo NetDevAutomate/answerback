@@ -262,9 +262,19 @@ def parser(
             "again for a current selection"
         ),
     )
+    send.add_argument(
+        "--subject",
+        help=(
+            "What the work is about, such as a commit SHA (1-256 printable characters); "
+            "stored on the receipt, never checked"
+        ),
+    )
     tasks = commands.add_parser("tasks", help="Find recent task receipts by peer keywords")
     tasks.add_argument("query", nargs="?", default="")
     tasks.add_argument("--limit", type=int, default=30)
+    tasks.add_argument(
+        "--subject", help="Only receipts whose subject is exactly this text, from all receipts"
+    )
     for name in ("permissions", "permission-answer", "cancel"):
         control = commands.add_parser(name)
         control.add_argument("task_id", nargs="?")
@@ -725,10 +735,18 @@ async def dispatch(args: argparse.Namespace) -> dict[str, Any]:
                 "request_id": args.request_id,
                 "provider": args.provider,
                 "binding": args.binding,
+                **({"subject": args.subject} if args.subject is not None else {}),
             },
         )
     if args.command == "tasks":
-        return await bridge.call("task_list", {"query": args.query, "limit": args.limit})
+        return await bridge.call(
+            "task_list",
+            {
+                "query": args.query,
+                "limit": args.limit,
+                **({"subject": args.subject} if args.subject is not None else {}),
+            },
+        )
     if args.command in ("task", "permissions", "permission-answer", "cancel"):
         if bool(args.task_id) == bool(args.peer):
             raise ValueError("Specify either a task ID or --peer with a name/project selector")

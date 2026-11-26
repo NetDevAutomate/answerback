@@ -5,9 +5,15 @@ from collections.abc import Callable
 from pathlib import Path
 
 from ..retention import content_matches
+from ..subjects import admission_subject
 from ..tasks import TaskStore
 from .contracts import Peer, PreparedPeer, Submission, TaskReceipt
 from .registry import AdapterRegistry
+
+
+def same_subject(receipt: TaskReceipt, submission: Submission) -> bool:
+    """The receipt holds exactly the submission's subject (both None counts as the same)."""
+    return receipt.as_record().get("subject") == submission.subject
 
 
 class AdapterRouter:
@@ -20,6 +26,10 @@ class AdapterRouter:
         if returned is None:
             return None
         persisted = TaskReceipt.from_record(self.store.get(returned.task_id))
+        if persisted.request_id == submission.request_id and not same_subject(
+            persisted, submission
+        ):
+            raise ValueError("request_id already describes different work")
         if (
             persisted.request_id != submission.request_id
             or persisted.provider != adapter.name
@@ -66,8 +76,20 @@ class AdapterRouter:
                 before_admission()
 
         guard()
-        returned = await adapter.submit(prepared, submission, guard=guard)
+        # Adapters reserve without naming a subject; the store takes it from this
+        # registration for this request ID only (`subjects.admission_subject`).
+        with admission_subject(self.store.path, submission.request_id, submission.subject):
+            returned = await adapter.submit(prepared, submission, guard=guard)
         persisted = TaskReceipt.from_record(self.store.get(returned.task_id))
+        if persisted.request_id == submission.request_id and not same_subject(
+            persisted, submission
+        ):
+            raise ValueError(
+                "Adapter reserved the receipt without its subject (it reserved in another "
+                "store); the receipt exists without one: inspect it before sending again"
+                if persisted.as_record().get("subject") is None
+                else "request_id already describes different work"
+            )
         if (
             persisted.target != prepared.target_key
             or persisted.request_id != submission.request_id

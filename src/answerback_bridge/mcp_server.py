@@ -243,8 +243,13 @@ def create_server(
         request_id: str,
         provider: str | None = None,
         binding: str | None = None,
+        subject: str | None = None,
     ) -> dict[str, Any]:
         """Send authorized work to a unique peer selected through peer_search.
+
+        `subject` (optional, 1-256 printable characters) names what the work is about, such as
+        a commit SHA; it is stored on the receipt and filters task_list. The bridge never
+        checks it. The same request_id with another subject is refused as different work.
 
         Pass the `binding` peer_search returned for this peer when present; it is required
         for providers whose peers carry a binding. If the selector now resolves to a
@@ -266,6 +271,7 @@ def create_server(
                 "request_id": request_id,
                 "provider": provider,
                 "binding": binding,
+                "subject": subject,
             },
         )
 
@@ -275,9 +281,14 @@ def create_server(
         return await bridge.call("task_for_peer", {"selector": selector, "provider": provider})
 
     @kernel_tool(READ)
-    async def task_list(query: str = "", limit: int = 30) -> dict[str, Any]:
-        """Search the latest 100 receipts by peer/project keywords; bodies are omitted."""
-        return await bridge.call("task_list", {"query": query, "limit": limit})
+    async def task_list(
+        query: str = "", limit: int = 30, subject: str | None = None
+    ) -> dict[str, Any]:
+        """Search the latest 100 receipts by peer/project keywords; bodies are omitted.
+
+        With `subject`, search every receipt whose subject is exactly that text instead.
+        """
+        return await bridge.call("task_list", {"query": query, "limit": limit, "subject": subject})
 
     @kernel_tool(READ)
     async def task_permissions(task_id: str) -> dict[str, Any]:

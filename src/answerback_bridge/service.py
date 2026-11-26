@@ -73,6 +73,7 @@ from .providers.herdr.core_tasks import CoreTasks
 from .providers.herdr.herdr import Herdr
 from .retention import matches_work, task_availability
 from .rex_service import RexService
+from .subjects import validate_subject
 from .tasks import TERMINAL, TaskStore
 from .transport import runtime_dir
 from .workers import Workers
@@ -1002,7 +1003,10 @@ class Bridge:
         request_id: str,
         provider: str | None = None,
         binding: str | None = None,
+        subject: str | None = None,
     ) -> dict[str, Any]:
+        # Refused before discovery, so an invalid subject reserves and sends nothing.
+        subject = validate_subject(subject)
         expected_digest = routing_digest(self.config)
         prefix, separator, target = selector.partition(":")
         if separator and self.adapters.contains(prefix):
@@ -1010,7 +1014,7 @@ class Bridge:
             if provider is not None and self.adapters.canonical(provider) != adapter.name:
                 raise ValueError("Peer handle conflicts with the selected provider")
             previous = self.router.previous(
-                adapter.name + ":" + target, Submission(message, request_id)
+                adapter.name + ":" + target, Submission(message, request_id, subject)
             )
             if previous is not None:
                 return public_task(previous.as_record())
@@ -1030,28 +1034,30 @@ class Bridge:
         # waits `retry_after_s` and asks again with the same request_id. A hold never hides
         # a receipt that request already has: the repeat is answered with it.
         if (held := hold_for(self.pressure, peer)) is not None:
-            repeated = await self._repeated(peer, message, request_id)
+            repeated = await self._repeated(peer, message, request_id, subject)
             if repeated is not None:
                 return repeated
             return backoff_result(held, self.pressure)
         return await self.submit_resolved(
-            peer, message, request_id, expected_routing_digest=expected_digest
+            peer, message, request_id, expected_routing_digest=expected_digest, subject=subject
         )
 
     async def _repeated(
-        self, peer: dict[str, Any], message: str, request_id: str
+        self, peer: dict[str, Any], message: str, request_id: str, subject: str | None = None
     ) -> dict[str, Any] | None:
         """The public receipt `request_id` already has for this peer and message, else None.
 
         The same check admission makes (`TaskStore.reserve_in_transaction`): the stored
-        receipt must name this peer's target key, provider and message, or the repeat
-        describes different work and is refused as it would be unheld.
+        receipt must name this peer's target key, provider, message and subject, or the
+        repeat describes different work and is refused as it would be unheld.
         """
         task = self.store.by_request(request_id)
         if task is None:
             return None
         prepared = await self.router.prepare(Peer.from_record(peer))
-        if not matches_work(task, prepared.target_key, message, request_id, prepared.peer.provider):
+        if not matches_work(
+            task, prepared.target_key, message, request_id, prepared.peer.provider, subject=subject
+        ):
             raise ValueError("request_id already describes different work")
         return public_task(task)
 
@@ -1062,6 +1068,7 @@ class Bridge:
         request_id: str,
         *,
         expected_routing_digest: str | None = None,
+        subject: str | None = None,
     ) -> dict[str, Any]:
         expected_routing_digest = expected_routing_digest or routing_digest(self.config)
 
@@ -1073,7 +1080,7 @@ class Bridge:
         verify_routing()
         prepared = await self.router.prepare(Peer.from_record(peer))
         receipt = await self.router.submit(
-            prepared, Submission(message, request_id), before_admission=verify_routing
+            prepared, Submission(message, request_id, subject), before_admission=verify_routing
         )
         return public_task(receipt.as_record())
 
@@ -1142,13 +1149,26 @@ class Bridge:
 
         return await asyncio.to_thread(read)
 
-    def task_list(self, query: str = "", limit: int = 30) -> dict[str, Any]:
+    def task_list(
+        self, query: str = "", limit: int = 30, subject: str | None = None
+    ) -> dict[str, Any]:
+        """Receipt summaries, newest first, bodies omitted.
+
+        Without `subject` the latest 100 receipts are searched. With it, the receipts whose
+        subject is exactly `subject` are, from the whole store (the newest 100 of them), and
+        `subject_matches` counts all of them, so a caller can see what `limit` left out.
+        """
         if not 1 <= limit <= 100:
             raise ValueError("limit must be between 1 and 100")
         words = query.casefold().split(maxsplit=32)
         if len(words) > 32:
             raise ValueError("query must contain at most 32 search terms")
-        tasks = self.store.recent(100)
+        subject = validate_subject(subject)
+        if subject is None:
+            tasks = self.store.recent(100)
+            matched = None
+        else:
+            tasks, matched = self.store.by_subject(subject, limit=100)
         selected = []
         for task in tasks:
             if words:
@@ -1168,10 +1188,13 @@ class Bridge:
                 key: task[key]
                 for key in ("id", "request_key", "target", "status", "created", "updated")
             }
+            summary["subject"] = task.get("subject")
             summary.update(task_availability(task))
             summary["detail"] = (task["detail"] or "")[:500]
             summaries.append(summary)
-        return {"tasks": summaries, "searched_latest": 100}
+        if matched is None:
+            return {"tasks": summaries, "searched_latest": 100}
+        return {"tasks": summaries, "subject": subject, "subject_matches": matched}
 
     async def task_for_peer(self, selector: str, provider: str | None = None) -> dict[str, Any]:
         try:

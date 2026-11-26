@@ -5,6 +5,8 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol, get_args, runtime_checkable
 
+from ..subjects import validate_subject
+
 TaskStatus = Literal[
     "pending",
     "queued",
@@ -90,12 +92,16 @@ class PreparedPeer:
 class Submission:
     message: str
     request_id: str
+    # What the sender says the hand-off is about. The router stores it on the receipt; an
+    # adapter reserves as before and never needs to read it.
+    subject: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.message, str) or not self.message.strip():
             raise ValueError("Submission message is required")
         if not isinstance(self.request_id, str) or not self.request_id.strip():
             raise ValueError("Submission request ID is required")
+        validate_subject(self.subject)
 
 
 @dataclass(frozen=True, slots=True)

@@ -32,6 +32,8 @@ KNOWN = {
         "retention_records",
         "retention_applications",
         "sqlite_sequence",
+        # Receipt subjects (T-277): short sender text, kept with the receipt, never pruned.
+        "task_subjects",
     },
     "bus": {
         "retention_history",

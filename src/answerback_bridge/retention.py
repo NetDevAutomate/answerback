@@ -80,6 +80,38 @@ def migrate_tasks(db: sqlite3.Connection) -> None:
             ON CONFLICT(entity,row_id) DO UPDATE SET changed_at={SQL_CLOCK}; END""")
 
 
+def migrate_subjects(db: sqlite3.Connection) -> None:
+    """The subject of each receipt that has one (T-277), in its own table.
+
+    A table rather than a `tasks` column, so the `tasks` columns that positional inserts and
+    maintenance's schema check rely on are unchanged. A row is written by the reservation
+    that creates the receipt, never updated, and removed with its task.
+    """
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS task_subjects (task_id TEXT PRIMARY KEY, subject TEXT NOT NULL)"
+    )
+    db.execute("CREATE INDEX IF NOT EXISTS task_subjects_subject ON task_subjects(subject)")
+    db.execute(
+        "CREATE TRIGGER IF NOT EXISTS task_subjects_immutable BEFORE UPDATE ON task_subjects "
+        "BEGIN SELECT RAISE(ABORT, 'Task subject is immutable'); END"
+    )
+    db.execute(
+        "CREATE TRIGGER IF NOT EXISTS task_subjects_deleted AFTER DELETE ON tasks "
+        "BEGIN DELETE FROM task_subjects WHERE task_id=OLD.id; END"
+    )
+
+
+def read_subject(db: sqlite3.Connection, task_id: str) -> str | None:
+    """The receipt's subject, or None for one without (or a store without the table)."""
+    try:
+        row = db.execute("SELECT subject FROM task_subjects WHERE task_id=?", (task_id,)).fetchone()
+    except sqlite3.OperationalError as error:
+        if "no such table" in str(error):
+            return None
+        raise
+    return None if row is None else row[0]
+
+
 def content_identity(value: str | None) -> dict[str, Any]:
     if value is not None and not isinstance(value, str):
         raise ValueError("Content must be text or null")
@@ -184,11 +216,27 @@ def content_matches(task: dict[str, Any], field: str, value: str | None) -> bool
     raise ValueError("Pruned task content cannot be verified; inspect the existing receipt")
 
 
+# `matches_work` without a subject leaves it to the caller: a provider's own repeat check
+# does not know the submission's subject, and the router compares it on every receipt.
+ANY_SUBJECT: Any = object()
+
+
 def matches_work(
-    task: dict[str, Any], target: str, message: str, request_key: str, provider: str | None = None
+    task: dict[str, Any],
+    target: str,
+    message: str,
+    request_key: str,
+    provider: str | None = None,
+    *,
+    subject: Any = ANY_SUBJECT,
 ) -> bool:
+    """The stored receipt describes this work: request, target, provider, subject, message.
+
+    A receipt from before subjects existed has none, so it matches only a repeat without one.
+    """
     return (
         task["request_key"] == request_key
+        and (subject is ANY_SUBJECT or task.get("subject") == subject)
         and task["target"] == target
         and (provider is None or task["metadata"].get("kind") == provider)
         and content_matches(task, "message", message)
@@ -259,6 +307,7 @@ def read_record(db: sqlite3.Connection, entity: str, ident: str | int) -> dict[s
 def decode_task(row: sqlite3.Row, db: sqlite3.Connection) -> dict[str, Any]:
     task = dict(row)
     task["metadata"] = json.loads(task["metadata"])
+    task["subject"] = read_subject(db, task["id"])
     record = read_record(db, "tasks", task["id"])
     if record is not None:
         if set(record["fields"]) != {"message", "result", "detail"} or task["message"] != "":
