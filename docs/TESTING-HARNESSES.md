@@ -15,7 +15,7 @@ just check
 ```
 
 ```text
-summary: tracked=706 scanned=692 skipped_binary=14 skipped_dir=0 content_hits=2 path_hits=0 binary_hits=0 allowlisted=2 hits=0
+summary: tracked=706 scanned=692 skipped_binary=14 skipped_dir=0 content_hits=0 path_hits=0 binary_hits=0 allowlisted=0 hits=0
 ```
 
 The line shown is the gate's last, from `just assert-public-tree`; `hits=0` and exit `0` mean every
