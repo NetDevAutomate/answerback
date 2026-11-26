@@ -76,6 +76,9 @@ class AdapterRouter:
                 before_admission()
 
         guard()
+        # A receipt that exists already is a repeat: one the adapter returns with another
+        # subject is different work, not a reservation that lost its subject.
+        prior = self.store.by_request(submission.request_id)
         # Adapters reserve without naming a subject; the store takes it from this
         # registration for this request ID only (`subjects.admission_subject`).
         with admission_subject(self.store.path, submission.request_id, submission.subject):
@@ -109,6 +112,7 @@ class AdapterRouter:
                 "Adapter reserved the receipt without its subject; the receipt exists "
                 "without one: inspect it before sending again"
                 if persisted.as_record().get("subject") is None
+                and (prior is None or prior["id"] != persisted.task_id)
                 else "request_id already describes different work"
             )
         if (

@@ -21,6 +21,7 @@ from ...pressure import (
 from ...pressure.signatures import BY_KEY, account_of, line_digest
 from ...process import BridgeError, CommandCleanupError, module_launch_argv
 from ...retention import matches_work
+from ...subjects import admitted_subject
 from ...tasks import TaskStore
 from ...worker_runtime import ACPWorkerRuntime, Job, Throttled, native_stopped_fact
 from .protocol import NativeTransport
@@ -223,7 +224,11 @@ class NativeWorkers(ACPWorkerRuntime):
         target = f"{self.provider_name}:{alias}:{cwd}"
         repeated = self.store.by_request(request_id)
         if repeated is not None:
-            if not matches_work(repeated, target, message, request_id, self.provider_name):
+            # The subject comes from the router's admission, as a reservation takes it.
+            subject = admitted_subject(self.store.path, request_id, None)
+            if not matches_work(
+                repeated, target, message, request_id, self.provider_name, subject=subject
+            ):
                 raise ValueError("request_id already describes different work")
             return public_task(repeated)
         if len(self.jobs) >= MAX_QUEUED_JOBS:

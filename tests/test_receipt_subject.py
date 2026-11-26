@@ -433,6 +433,23 @@ async def test_an_adapter_that_loses_the_subject_in_its_store_is_refused(
         await bridge.close()
 
 
+async def test_a_subjectless_repeat_returned_by_an_adapter_is_different_work(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import answerback_bridge.tasks as tasks
+
+    bridge, adapter = environment(tmp_path / "config.json")
+    try:
+        sent = await bridge.peer_submit("fixture:one", "Review", "r1")
+        # As an adapter whose own repeat check ignores the subject.
+        monkeypatch.setattr(tasks, "admitted_subject", lambda store, key, subject: subject)
+        with pytest.raises(ValueError, match=DIFFERENT):
+            await bridge.peer_submit("fixture:one", "Review", "r1", subject=SHA)
+        assert bridge.store.get(sent["id"])["subject"] is None
+    finally:
+        await bridge.close()
+
+
 async def test_task_list_filters_by_exact_subject(tmp_path: Path) -> None:
     bridge, adapter = environment(tmp_path / "config.json")
     try:

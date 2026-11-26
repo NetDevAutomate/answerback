@@ -453,6 +453,43 @@ async def test_service_routes_registered_native_work_and_exact_result(
         await bridge.close()
 
 
+async def test_native_repeat_with_another_subject_is_different_work(tmp_path, monkeypatch, setup):
+    """T-277 review: a native repeat compares the subject in its own repeat check, so a
+    subjectless receipt repeated with a subject (or the reverse) is refused as different
+    work rather than misread by the router as a reservation in another store."""
+    from answerback_bridge import native_workers
+    from answerback_bridge.service import Bridge
+
+    monkeypatch.setattr(native_workers, "transport_for", lambda _: FakeTransport)
+    config = Config(
+        codex_cli_workspaces={"work": str(tmp_path)},
+        codex_cli_home=str(tmp_path / "native-home"),
+    )
+    config.select_provider("codex_cli", True)
+    path = tmp_path / "subject.json"
+    config.save(path)
+    bridge = Bridge(config, path)
+    try:
+        await bridge.peer_search(provider="codex_cli")
+        plain = await bridge.peer_submit("codex_cli:work", "review parser", "plain-1")
+        await finish(bridge.worker_owner(plain["id"]), plain["id"])
+        with pytest.raises(ValueError, match="^request_id already describes different work$"):
+            await bridge.peer_submit("codex_cli:work", "review parser", "plain-1", subject="v1")
+        labelled = await bridge.peer_submit(
+            "codex_cli:work", "review parser", "labelled-1", subject="v1"
+        )
+        await finish(bridge.worker_owner(labelled["id"]), labelled["id"])
+        with pytest.raises(ValueError, match="^request_id already describes different work$"):
+            await bridge.peer_submit("codex_cli:work", "review parser", "labelled-1")
+        again = await bridge.peer_submit(
+            "codex_cli:work", "review parser", "labelled-1", subject="v1"
+        )
+        assert again["id"] == labelled["id"] and again["subject"] == "v1"
+        assert len(FakeTransport.prompts) == 2
+    finally:
+        await bridge.close()
+
+
 def test_native_recovery_never_replays_after_restart(setup):
     _, _, store, _ = setup
     task, _ = store.reserve("codex_cli:test", "one", "request-1", {"kind": "codex_cli"})
