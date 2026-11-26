@@ -44,8 +44,8 @@ answerback --version          # 0.16.1
 answerback providers list     # includes the plugin's provider on this composition
 ```
 
-zsh reads `[bus]` as a file pattern and stops with `no matches found`; there, quote the extra
-alone: `~/code/personal/tools/answerback'[bus]'`. Add any other extra you use (`claude`)
+`answerback providers list` asks the running bridge, so restart it after the install. zsh
+reads `[bus]` as a file pattern and stops with `no matches found`; there, quote the extra alone: `~/code/personal/tools/answerback'[bus]'`. Add any other extra you use (`claude`)
 inside the same brackets: each `uv tool install` replaces the earlier set.
 
 ## Move an installed 0.16.0+internal node

@@ -395,7 +395,8 @@ answerback --version          # 0.16.1
 answerback providers list     # includes the plugin's provider on this composition
 ```
 
-zsh reads `[bus]` as a file pattern; there, quote the extra alone
+`answerback providers list` asks the running bridge, so run `answerback restart` after an
+install. zsh reads `[bus]` as a file pattern; there, quote the extra alone
 (`~/code/personal/tools/answerback'[bus]'`). Each `uv tool install` replaces the earlier set, so
 name every extra and plugin in one command.
 [MIGRATION.md](MIGRATION.md) says how an installation of the combined 0.16.0 tree moves to these.
