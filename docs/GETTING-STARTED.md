@@ -127,7 +127,8 @@ for a completed receipt, which reads like this (three of its fields):
 
 `--subject` is optional. It labels the receipt with what the work is about, here the word
 `hello`; for real work it is usually the commit SHA under review, and `answerback tasks
---subject <text>` lists the receipts with it, newest first ([Receipts](RECEIPTS.md#name-what-a-hand-off-is-about)).
+--subject <text>` lists the receipts with it, newest first and at most the newest 100; its
+`subject_matches` counts them all ([Receipts](RECEIPTS.md#name-what-a-hand-off-is-about)).
 The bridge stores it and never checks it.
 
 A receipt that reads `completed` with `ANSWERBACK_OK` is a live model round trip through a
