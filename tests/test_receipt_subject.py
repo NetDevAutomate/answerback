@@ -261,7 +261,7 @@ async def test_send_stamps_the_receipt_and_task_shows_it(tmp_path: Path) -> None
         listed = bridge.task_list()["tasks"]
         assert listed[0]["subject"] == SHA
         again = await bridge.peer_submit("fixture:one", "Review", "r1", subject=SHA)
-        assert again["id"] == sent["id"] and adapter.sends == 1
+        assert again["id"] == sent["id"] and again["subject"] == SHA and adapter.sends == 1
         for other in ("else", None):
             with pytest.raises(ValueError, match=DIFFERENT):
                 await bridge.peer_submit("fixture:one", "Review", "r1", subject=other)
@@ -380,8 +380,15 @@ async def test_mcp_peer_submit_and_task_list_carry_subject(tmp_path: Path) -> No
             assert receipt["subject"] == SHA
             got = await client.call_tool("task_get", {"task_id": receipt["id"]})
             assert got.structured_content["subject"] == SHA
-            listed = await client.call_tool("task_list", {"subject": SHA})
-            assert [task["id"] for task in listed.structured_content["tasks"]] == [receipt["id"]]
+            bridge.store.update(receipt["id"], "completed", result="ok")
+            await client.call_tool(
+                "peer_submit",
+                {"selector": "fixture:one", "message": "Other", "request_id": "m2", "subject": "x"},
+            )
+            listed = (await client.call_tool("task_list", {"subject": SHA})).structured_content
+            assert [task["id"] for task in listed["tasks"]] == [receipt["id"]]
+            assert listed["subject"] == SHA and listed["subject_matches"] == 1
+            assert "searched_latest" not in listed
     finally:
         await bridge.close()
 
@@ -404,3 +411,162 @@ def test_maintenance_prunes_a_receipt_with_a_subject_and_keeps_the_subject(
     pruned = store.get(task["id"])
     assert pruned["message"] == "" and pruned["result"] is None and pruned["subject"] == SHA
     assert [found["id"] for found in store.by_subject(SHA)[0]] == [task["id"]]
+
+
+def test_overlapping_admissions_keep_the_subject_until_the_last_one_ends(tmp_path: Path) -> None:
+    from contextlib import ExitStack
+
+    path = tmp_path / "tasks.sqlite"
+    store = TaskStore(path)
+    first, second = ExitStack(), ExitStack()
+    first.enter_context(admission_subject(path, "r1", SHA))
+    second.enter_context(admission_subject(path, "r1", SHA))
+    first.close()  # A ends (failed before reserving) while B is still admitting.
+    with pytest.raises(ValueError, match=DIFFERENT):
+        with admission_subject(path, "r1", "else"):
+            pass
+    task, _ = store.reserve("t", "Review", "r1", {"kind": "fixture"})
+    assert task["subject"] == SHA
+    second.close()
+    with admission_subject(path, "r1", "else"):  # nothing is held any more
+        pass
+
+
+async def test_a_repeat_admitted_while_the_first_ends_keeps_the_subject(tmp_path: Path) -> None:
+    """B enters before A reserves and reserves only after A has ended (red when the first
+    admission's exit drops the registration B still relies on)."""
+    bridge, adapter = environment(tmp_path / "config.json")
+    entered, release = asyncio.Event(), asyncio.Event()
+    original = adapter.submit
+    calls = 0
+
+    async def interleaved(
+        prepared: PreparedPeer, submission: Submission, *, guard: Guard
+    ) -> TaskReceipt:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            await entered.wait()  # A waits until B is inside its admission
+        else:
+            entered.set()
+            await release.wait()  # B waits until A has finished
+        return await original(prepared, submission, guard=guard)
+
+    adapter.submit = interleaved  # type: ignore[method-assign]
+    try:
+        first = asyncio.create_task(bridge.peer_submit("fixture:one", "Review", "r1", subject=SHA))
+        second = asyncio.create_task(bridge.peer_submit("fixture:one", "Review", "r1", subject=SHA))
+        a = await first
+        release.set()
+        b = await second
+        assert a["id"] == b["id"] and b["subject"] == SHA and adapter.sends == 1
+    finally:
+        await bridge.close()
+
+
+async def test_a_held_repeat_is_answered_only_for_the_same_subject(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import answerback_bridge.service as service
+
+    bridge, adapter = environment(tmp_path / "config.json")
+    try:
+        sent = await bridge.peer_submit("fixture:one", "Review", "r1", subject=SHA)
+        monkeypatch.setattr(service, "hold_for", lambda pressure, peer: object())
+        monkeypatch.setattr(
+            service, "backoff_result", lambda held, pressure: {"status": "provider_backoff"}
+        )
+        again = await bridge.peer_submit("fixture:one", "Review", "r1", subject=SHA)
+        assert again["id"] == sent["id"] and again["subject"] == SHA
+        for other in ("else", None):
+            with pytest.raises(ValueError, match=DIFFERENT):
+                await bridge.peer_submit("fixture:one", "Review", "r1", subject=other)
+        new = await bridge.peer_submit("fixture:one", "Review", "r2", subject=SHA)
+        assert new == {"status": "provider_backoff"} and adapter.sends == 1
+    finally:
+        await bridge.close()
+
+
+async def test_receipts_without_a_subject_show_null(tmp_path: Path) -> None:
+    bridge, _ = environment(tmp_path / "config.json")
+    try:
+        sent = await bridge.peer_submit("fixture:one", "Review", "r1")
+        assert "subject" in sent and sent["subject"] is None
+        assert (await bridge.get_task(sent["id"]))["subject"] is None
+        summary = bridge.task_list()["tasks"][0]
+        assert "subject" in summary and summary["subject"] is None
+    finally:
+        await bridge.close()
+
+
+def test_task_list_takes_the_newest_100_subject_matches_and_counts_all(tmp_path: Path) -> None:
+    bridge = Bridge(Config(provider_selection=[]), tmp_path / "config.json")
+    store = bridge.store
+    oldest, _ = store.reserve("old", "Review", "oldest", {"kind": "fixture"}, subject=SHA)
+    store.update(oldest["id"], "completed", result="ok")
+    for index in range(101):
+        row, _ = store.reserve(f"t{index}", "Review", f"m{index}", {"kind": "f"}, subject=SHA)
+        store.update(row["id"], "completed", result="ok")
+    for index in range(100):
+        row, _ = store.reserve(f"n{index}", "Noise", f"n{index}", {"kind": "f"})
+        store.update(row["id"], "completed", result="ok")
+    listed = bridge.task_list(limit=100, subject=SHA)
+    assert len(listed["tasks"]) == 100 and listed["subject_matches"] == 102
+    assert oldest["id"] not in {task["id"] for task in listed["tasks"]}
+    assert all(task["subject"] == SHA for task in listed["tasks"])
+    few = bridge.task_list(limit=3, subject=SHA)
+    assert len(few["tasks"]) == 3 and few["subject_matches"] == 102
+    none = bridge.task_list("nomatch", subject=SHA)
+    assert none["tasks"] == [] and none["subject_matches"] == 102
+    # Without a subject only the latest 100 receipts are searched, so the oldest is missed.
+    assert oldest["id"] not in {task["id"] for task in bridge.task_list("oldest")["tasks"]}
+    # With one, a receipt outside the latest 100 is found.
+    store_only, total = store.by_subject(SHA, limit=100)
+    assert total == 102 and len(store_only) == 100
+
+
+def test_an_admission_that_raises_releases_its_subject(tmp_path: Path) -> None:
+    path = tmp_path / "tasks.sqlite"
+    with pytest.raises(RuntimeError):
+        with admission_subject(path, "r1", SHA):
+            raise RuntimeError("adapter failed")
+    with admission_subject(path, "r1", "else"):
+        pass
+
+
+@pytest.mark.parametrize(
+    ("argv", "method", "expected"),
+    [
+        (
+            ["send", "fixture:one", "--message", "m", "--request-id", "r", "--subject", SHA],
+            "peer_submit",
+            SHA,
+        ),
+        (["send", "fixture:one", "--message", "m", "--request-id", "r"], "peer_submit", None),
+        (["tasks", "--subject", SHA], "task_list", SHA),
+        (["tasks"], "task_list", None),
+    ],
+)
+async def test_cli_forwards_subject_only_when_given(
+    monkeypatch: pytest.MonkeyPatch, argv: list[str], method: str, expected: str | None
+) -> None:
+    import answerback_bridge.cli as cli
+
+    calls: list[tuple[str, dict]] = []
+
+    class Recording:
+        def __init__(self, config: object) -> None:
+            pass
+
+        async def call(self, name: str, params: dict) -> dict:
+            calls.append((name, params))
+            return {}
+
+    monkeypatch.setattr(cli, "RemoteBridge", Recording)
+    await cli.dispatch(cli.parser().parse_args(argv))
+    assert [name for name, _ in calls] == [method]
+    params = calls[0][1]
+    if expected is None:
+        assert "subject" not in params
+    else:
+        assert params["subject"] == expected
