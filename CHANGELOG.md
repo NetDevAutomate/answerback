@@ -18,7 +18,8 @@ to, stay in the maintainers' private archive.
   with a different subject, or with one where the first had none, is refused as different
   work. The bridge never checks a subject, and adapters need no change: the router hands the
   subject to the store's reservation. The task store gains a `task_subjects` table, added on
-  first open, with a trigger that refuses changing a stored subject; the `tasks` table itself is
+  first open, with triggers that refuse changing a stored subject or deleting it while its
+  receipt exists; maintenance refuses a `task_subjects` table with unknown columns; the `tasks` table itself is
   unchanged and older receipts read `null`. Maintenance keeps a subject when it prunes a
   receipt's message and result. A bridge downgraded onto a migrated store still sends and
   reads receipts but shows and compares no subject, and its maintenance treats the store as an
