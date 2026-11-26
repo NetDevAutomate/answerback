@@ -1,3 +1,6 @@
 # Exact, temporary source-line exceptions only; delete each when no longer needed.
 # Paths containing ':' or starting with '#' cannot be listed and fail closed.
 # Each entry: path:line:stripped text. The reason stands in the comment above it.
+#
+# Deliberately empty: the public tree carries no internal-provider reference. A test
+# (tests/test_assert_public_tree.py) pins that this file lists no entry.

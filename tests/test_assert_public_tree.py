@@ -269,6 +269,32 @@ def test_header_only_allowlist_is_valid(tmp_path: Path) -> None:
     assert result.returncode == 0
 
 
+def test_a_missing_allowlist_fails_closed(tmp_path: Path) -> None:
+    root = _tree(tmp_path, {"src/clean.py": "clean\n"})
+    (root / "tools/public-tree-allowlist.txt").unlink()
+
+    result = _run(root)
+
+    assert result.returncode == 2
+    assert "cannot read allowlist" in result.stderr
+
+
+def test_a_comments_only_allowlist_exempts_no_hit(tmp_path: Path) -> None:
+    root = _tree(tmp_path, {"src/provider.py": f"{TARGET}\n"})
+
+    result = _run(root)
+
+    assert result.returncode == 1
+    assert result.stdout.splitlines()[0] == f"src/provider.py:1: {TARGET}"
+    assert "allowlisted=0" in result.stdout
+
+
+def test_the_projects_allowlist_lists_no_entry() -> None:
+    lines = (PROJECT / "tools/public-tree-allowlist.txt").read_text(encoding="utf-8").splitlines()
+
+    assert [line for line in lines if line.strip() and not line.lstrip().startswith("#")] == []
+
+
 @pytest.mark.parametrize(
     ("entry", "message"),
     [
