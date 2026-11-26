@@ -243,8 +243,9 @@ public `PluginOwners` where needed. Uninstalling a provider removes its live sur
 changing the kernel; a saved config block for the absent provider is kept, reported as `disabled`
 with a warning, and written back unchanged.
 
-Answerback's own gate runs in [two compositions](TESTING-HARNESSES.md#the-two-compositions): with
-no plugin package installed, and with the internal provider package installed. Apply the same rule
+Answerback's plugins are gated in [two compositions](TESTING-HARNESSES.md#the-two-compositions):
+this repository's gate with no plugin package installed, and each plugin repository's gate with
+its package installed beside a clone of the kernel. Apply the same rule
 in your own CI: the kernel suite with your package absent, and your package's suite with it
 installed.
 

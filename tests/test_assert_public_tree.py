@@ -425,8 +425,8 @@ def test_guard_has_no_hits_in_its_own_branch_files() -> None:
         "tests/test_assert_public_tree.py",
         "justfile",
     }
-    # CHANGELOG.md and docs/TESTING-HARNESSES.md carry pre-existing provider
-    # lines in this combined tree; the public repository's full check covers them.
+    # `just check` runs the full check of every tracked file (`just assert-public-tree`);
+    # this test pins the guard's own files.
     result = _run(PROJECT, "--json")
     report = json.loads(result.stdout)
     own_hits = [hit for hit in report["hits"] if hit["path"] in self_check_files]

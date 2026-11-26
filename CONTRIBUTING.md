@@ -20,18 +20,17 @@ uv run playwright install chromium
 ```
 
 ```text
-Resolved 50 packages in 1ms
-Checked 46 packages in 0.34ms
+Resolved 49 packages in 1ms
+Checked 46 packages in 0.26ms
 ```
 
 The two lines are `uv sync` on an environment that is already current; a first sync downloads and
-installs the same 50 packages. `--all-extras` installs the `bus`, `claude` and `debug` extras beside
+installs the same 49 packages. `--all-extras` installs the `bus`, `claude` and `debug` extras beside
 the core dependencies (`pyproject.toml`). Chromium is for the test suite's web-monitor fixtures,
 which need it and are not skipped without it.
 
-This is the public composition: the kernel and its own providers, no plugin package. The internal
-composition (`uv sync --all-extras --group internal`) adds the internal provider package and is
-gated by `just check-internal` ([the two
+This is the public composition: the kernel and its own providers, no plugin package. A provider
+plugin lives in a repository of its own and gates its composition there ([the two
 compositions](docs/TESTING-HARNESSES.md#the-two-compositions)).
 
 ## Checks before you send a change
@@ -43,7 +42,7 @@ compositions](docs/TESTING-HARNESSES.md#the-two-compositions)).
 | Attended acceptance | `just live-test` | Prints the [attended hc checklist](docs/LIVE-TEST.md#attended-hc-acceptance-integration-build); an owner runs it against real harness sessions | Yes |
 
 `.github/workflows/ci.yml` runs the gate and `just self-test` on every push and pull request, on
-Ubuntu and macOS, once per composition. Run both before sending a change. The evidence and
+Ubuntu and macOS. Run both before sending a change. The evidence and
 prerequisites behind each layer are in
 [docs/TESTING-HARNESSES.md](docs/TESTING-HARNESSES.md#choose-a-test-layer).
 
@@ -63,23 +62,20 @@ Every command, flag, path and number you write must check out against `--help` o
 source, not against another doc. Write commands as the installed `answerback` and `agent-bus`
 commands, without a `uv run` prefix.
 
-Public docs name no internal provider. The internal provider package is called exactly that, and
-nothing about its commands, paths or behaviour appears in `README.md`, `VALIDATION.md`,
-`SECURITY.md` or `docs/`. The gate for this is the public-tree assertion run over the docs:
+This repository names no internal provider. An internal provider package is called exactly that,
+and nothing about its commands, paths or behaviour appears anywhere in the tracked tree. The gate
+for this is the public-tree assertion, the last step of `just check`, run over every tracked file:
 
 ```sh
-uv run --no-sync python tools/assert_public_tree.py --skip-dir packages --skip-dir status \
-  --skip-dir uv.lock --skip-dir tests --skip-dir skills --skip-dir scripts \
-  --skip-dir CHANGELOG.md --skip-dir STATUS.md --skip-dir .gate-logs --skip-dir .gitignore \
-  --skip-dir docs/evidence
+just assert-public-tree
 ```
 
 ```text
-summary: tracked=1451 scanned=376 skipped_binary=12 skipped_dir=1063 content_hits=7 path_hits=0 binary_hits=0 allowlisted=7 hits=0
+summary: tracked=706 scanned=692 skipped_binary=14 skipped_dir=0 content_hits=2 path_hits=0 binary_hits=0 allowlisted=2 hits=0
 ```
 
 The summary line is the report's last line; a hit would be listed above it with its file and line.
-The docs pass only at `hits=0`; the seven `allowlisted` lines are the exact entries of
+The tree passes only at `hits=0`; the two `allowlisted` lines are the exact entries of
 `tools/public-tree-allowlist.txt`. Text that applies only to the internal provider goes into that
 package's own documentation, not fenced inside a public page.
 
@@ -94,7 +90,7 @@ Tests pin some passages word for word. Change one only together with its test:
 | The Kiro v3/v2 MCP-readiness sentences and the managed-route paragraph | `docs/RECIPIENTS.md`, `docs/HARNESSES.md` | `tests/test_workers.py` |
 | "The Kiro agent file": the refused list and what the write does not defend against; the "Exit codes" heading | `docs/NATIVE-CLI.md` | `tests/test_kiro_agent.py` |
 | The count, precheck and aid SQL | `docs/MAINTENANCE.md` | `tests/test_receipt_versions.py` |
-| The 8192-character scope bound, as a number | `docs/TRACING.md`, `CHANGELOG.md` | `tests/test_debug_scope_bound.py` |
+| The 8192-character scope bound, as a number | `docs/TRACING.md` | `tests/test_debug_scope_bound.py` |
 | The suite-lock sentence "One that stayed in the command's process group can still get the signals that the wrapper passes on, until the wrapper has waited for the command." | `docs/TESTING-HARNESSES.md` ("What the lock does not cover") | `tests/test_suite_lock.py:1838-1840`, which quotes it in its comment |
 | The `ANSWERBACK_LIVE_LAUNCHD=1` opt-in sentence | `docs/TESTING-HARNESSES.md` ("Running the suite") | `tests/test_runtime.py:478-482`, whose skip reason points at it |
 

@@ -41,9 +41,10 @@ hashes are in the external build receipt. The CLI-1 captures are in a private hi
 copy, and the exact date is not recorded here.
 
 Versions 0.11.0+internal to 0.16.0+internal shipped through their own merge gates, recorded in
-[CHANGELOG.md](CHANGELOG.md) and in the project's private ledger; no end-to-end qualification of
-those versions is recorded below. The combined source tree prints `0.16.0+internal` from
-`answerback --version`.
+the changelog and ledger of the maintainers' private archive; no end-to-end qualification of
+those versions is recorded below. This repository's tree prints `0.16.1` from
+`answerback --version`; 0.16.1 is the 0.16.0 kernel in a repository of its own
+([CHANGELOG.md](CHANGELOG.md)).
 
 ## What it cannot do yet
 

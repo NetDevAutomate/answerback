@@ -1,9 +1,9 @@
 """Which providers this test run composes: the kernel's own and any installed plugin.
 
 The kernel suite runs in two compositions (docs/TESTING-HARNESSES.md): PUBLIC, the default
-`uv sync`, composes the kernel's providers only; INTERNAL (`uv sync --group internal`) adds
-the one provider plugin of the internal composition, installed editable from its own package
-in this workspace. Snapshot literals that differ between the two are pinned side by side and
+`uv sync` of this repository, composes the kernel's providers only; INTERNAL adds exactly one
+provider plugin, installed editable beside the kernel from the plugin's own repository.
+Snapshot literals that differ between the two are pinned side by side and
 selected here (`pick`), and what the plugin adds to a kernel pin (names, snapshot fragments,
 fixture programs) is read from the plugin's own `tests/fixtures/kernel_composition.py`
 (`contributed`), so the kernel suite names no plugin.
@@ -48,7 +48,7 @@ def plugin_fixture_root() -> Path:
     """The installed plugin's own `tests/fixtures/` directory (editable install).
 
     Found through the plugin's entry point: its module's package root is the package
-    directory of the workspace member (`<package>/src/<module>/__init__.py`).
+    directory of the plugin's package (`<package>/src/<module>/__init__.py`).
     """
     assert INTERNAL, "the public composition installs no plugin"
     (name,) = PLUGIN_PROVIDERS

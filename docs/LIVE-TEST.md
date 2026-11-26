@@ -339,10 +339,10 @@ exactly as `hc machine ls` prints it, `AGENT` the harness word (`kiro`, `grok`,
 
 ### Evidence bundle
 
-Save one folder per pair, `docs/evidence/remote-OS-AGENT-RUN/` (or under
-`status/handoff/` for a run that is not published). Before publishing a folder,
+Save one folder per pair, `docs/evidence/remote-OS-AGENT-RUN/` (or in the maintainers' private
+archive for a run that is not published). Before publishing a folder,
 replace hostnames, user names and home directories with neutral values
-(`example-host`, `/home/user`); an unredacted run stays under `status/`. It holds:
+(`example-host`, `/home/user`); an unredacted run stays in the private archive. It holds:
 
 | File | Content |
 | --- | --- |

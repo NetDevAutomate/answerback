@@ -15,7 +15,7 @@ just check
 ```
 
 ```text
-summary: tracked=1451 scanned=332 skipped_binary=11 skipped_dir=1108 content_hits=7 path_hits=0 binary_hits=0 allowlisted=7 hits=0
+summary: tracked=706 scanned=692 skipped_binary=14 skipped_dir=0 content_hits=2 path_hits=0 binary_hits=0 allowlisted=2 hits=0
 ```
 
 The line shown is the gate's last, from `just assert-public-tree`; `hits=0` and exit `0` mean every
@@ -48,13 +48,12 @@ holds it, and `usable: yes` means `run` would accept the lock's folder.
 
 | Layer | Command | Evidence and prerequisites |
 | --- | --- | --- |
-| Regression gate, public composition | `just check` | After the default `uv sync`: lint, format, types, pytest, the [public-tree assertion](#public-tree-assertion), under the [suite lock](#suite-lock). No live model or account. |
-| Regression gate, internal composition | `just check-internal` | After `uv sync --all-extras --group internal`: the same with the internal provider package installed. |
+| Regression gate | `just check` | After the default `uv sync`: lint, format, types, pytest, the [public-tree assertion](#public-tree-assertion), under the [suite lock](#suite-lock). No live model or account. |
 | Scripted protocols | `just self-test` | `answerback self-test --mode simulated`: real local RPC, CLI, MCP STDIO, ACP and SQLite receipts, with scripted peers. No live model. |
 | Attended acceptance | `just live-test` | Prints the entry point to the [attended hc checklist](LIVE-TEST.md#attended-hc-acceptance-integration-build); runs no probe itself. |
 
-Each gate refuses the other composition's environment: `just check` stops when a provider plugin is
-installed, `just check-internal` when a package of the `internal` group is missing. The attended
+The gate refuses an environment that holds a provider plugin: `just check` stops when one is
+installed, and `uv sync --all-extras` restores the public environment. The attended
 layer is an owner at the actual Herdr App workers, recording results; the recipe is not an
 acceptance result.
 
@@ -67,21 +66,23 @@ exits nonzero. It does not take the suite lock: it is one protocol run, not a su
 ### The two compositions
 
 The kernel composes every provider from the `answerback.providers` entry points the installed
-distributions declare; nothing in `src/answerback_bridge/` names the internal provider. The
-`internal` dependency group installs the internal provider package
-(`uv sync --all-extras --group internal`); the default sync leaves it out. That package documents
-its own behaviour.
+distributions declare; nothing in `src/answerback_bridge/` names a provider plugin. This
+repository is the public composition: the default `uv sync` installs the kernel and its own
+providers, and no plugin. A provider plugin is a distribution of its own, kept in its own
+repository, which installs it beside a clone of this one and gates that composition itself; that
+package documents its own behaviour.
 
-The kernel suite pins what differs between the two compositions side by side and selects by
-`tests/composition.py`. With the plugin absent, `builtin_plugins()` lists the kernel's nine
-providers, and a saved config that names the absent provider loads with one warning as a disabled
-provider whose settings are kept; `doctor` shows it as `disabled`. CI runs one leg per composition.
-`tools/assert_composition.py` is the check each gate starts with, so the public gate never runs as
-the internal one by accident.
+The kernel suite pins what differs when one plugin is installed side by side and selects by
+`tests/composition.py`, which reads what the plugin adds from the plugin's own
+`tests/fixtures/kernel_composition.py`. With no plugin, `builtin_plugins()` lists the kernel's nine
+providers, and a saved config that names an absent provider loads with one warning as a disabled
+provider whose settings are kept; `doctor` shows it as `disabled`.
+`tools/assert_composition.py public` is the check `just check` starts with, so the kernel's gate
+never runs in a plugin's composition by accident.
 
 ## Public-tree assertion
 
-`just assert-public-tree` scans the Git-tracked files for references that belong only to the
+`just assert-public-tree` scans the Git-tracked files for references that belong only to an
 internal provider package. It checks each path before classifying its payload. The three-branch
 ASCII-only rule catches bounded case-insensitive `a[k]i`, camel-case `A[k]i` at an ASCII case or
 digit transition, and all-caps `A[K]I` before uppercase, a digit, or an underscore, or after a
@@ -93,14 +94,12 @@ Binary detection follows the path check: a NUL in the first 8 KiB marks a payloa
 ASCII and UTF-16LE bytes are scanned without text decoding. Binary matches report `kind: "binary"`;
 JSON (`--json`) also lists every binary path under `skipped_binary_paths`. The allowlist
 (`tools/public-tree-allowlist.txt`) is control data, not a blanket content exemption: exact entry
-text is exempt, while comments and entry paths are scanned. Its `A[K]IA` entry records the one
-verified cloud-credential false positive. The assertion scans only Git-tracked files, so an
+text is exempt, while comments and entry paths are scanned. Its two entries are the retired flat
+configuration keys the kernel reads until 0.17 ([the upgrade guide](ANSWERBACK-UPGRADE.md#the-configjson-layout)). The assertion scans only Git-tracked files, so an
 untracked file is not checked until `git add` stages it.
 
-`just check` runs the recipe over the shipped tree. In this combined repository the recipe skips
-the plugin package itself, `status/` (never copied to the public repository), the workspace lock,
-and the areas the repository split scrubs before the public repository runs the assertion over its
-whole tree. Each skip is listed in the `justfile`; remove one once its area is clean.
+`just check` runs the recipe over the whole tracked tree, with nothing skipped (`justfile`,
+recipe `assert-public-tree`).
 
 ## Suite lock
 
@@ -421,8 +420,8 @@ disappearance; a zombie is not accepted as a passing process check.
 ### Offline CI and local act runs
 
 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs the gate and `just self-test` on
-`ubuntu-latest` and `macos-latest`, once per composition (`just check` after the default sync,
-`just check-internal` after `--group internal`), using Python 3.13 and the locked dependencies.
+`ubuntu-latest` and `macos-latest` (`just check` after the default sync), using Python 3.13 and
+the locked dependencies.
 Setup downloads dependencies and Playwright Chromium; the check and self-test steps then set
 `UV_OFFLINE=1`. No model endpoint, external network service, NATS server, launchd job or systemd
 user service is required. The tests still use temporary loopback HTTP and Unix sockets.

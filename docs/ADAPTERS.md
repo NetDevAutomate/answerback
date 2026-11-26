@@ -173,9 +173,9 @@ shared `providers/native` package for `codex_cli`, `claude_code` and `grok`. The
 factories live together in `providers/herdr/`, one package with two registrations because the
 App/core and older TUI transports share identity and task machinery. `adapters/builtins.py` is a
 compatibility composition shim only: it loads those entry points, restores historical adapter order
-and rebinds first-party plugin owners. The internal composition adds one more distribution through
-the same group (`uv sync --all-extras --group internal`); the internal provider package documents
-its own behaviour.
+and rebinds first-party plugin owners. A provider plugin from another repository adds one more
+distribution through the same group, installed beside the kernel; that package documents its own
+behaviour.
 
 `plugin.load_plugins(group)` reads the installed entry points once per process, instantiates each
 target (a zero-argument factory or a plugin object), and runs these checks in order:
@@ -660,7 +660,7 @@ receipts and observed native calls, not merely mock call counts or successfully 
 ## Deferred to 0.17
 
 These were found while closing Phase 1 of the modular split and left in place on purpose.
-[CHANGELOG.md](../CHANGELOG.md#deferred-to-017) records the same eight items under the 0.16 entry;
+The 0.16.0 changelog, now in the maintainers' private archive, records the same eight items;
 the lines below are copied from it. The pre-0.16 flat-key window (flat keys read, `Config` flat
 attributes and positional arguments) closes in the same release.
 
