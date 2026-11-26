@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   check:
-    name: Check and scripted self-test (${{ matrix.os }}, ${{ matrix.composition }})
+    name: Check and scripted self-test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     defaults:
@@ -19,18 +19,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # The default sync: the kernel and its own providers, with the tracked tree
+        # asserted free of any internal provider. A provider plugin's repository gates the
+        # composition it makes.
         os: [ubuntu-latest, macos-latest]
-        # PUBLIC is the default sync: the kernel and its own providers, with the shipped
-        # tree asserted free of the internal provider. INTERNAL adds the plugin packages of
-        # the `internal` dependency group and runs their tests beside the kernel's.
-        composition: [public, internal]
-        include:
-          - composition: public
-            sync_groups: ""
-            gate: check
-          - composition: internal
-            sync_groups: "--group internal"
-            gate: check-internal
     env:
       # Explicit even on hosts with nats-server or launchctl on PATH.
       ANSWERBACK_TEST_OFFLINE: "1"
@@ -45,13 +37,13 @@ jobs:
           enable-cache: true
       - uses: extractions/setup-just@v3
       - name: Install locked dependencies
-        run: uv sync --locked --all-extras ${{ matrix.sync_groups }}
+        run: uv sync --locked --all-extras
       - name: Install Chromium and its platform dependencies
         run: uv run --no-sync playwright install --with-deps chromium
       - name: Check
         env:
           UV_OFFLINE: "1"
-        run: just ${{ matrix.gate }}
+        run: just check
       - name: Scripted self-test
         env:
           UV_OFFLINE: "1"
@@ -60,6 +52,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: self-test-${{ matrix.os }}-${{ matrix.composition }}
+          name: self-test-${{ matrix.os }}
           path: self-test.json
           if-no-files-found: ignore

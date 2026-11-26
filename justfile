@@ -6,16 +6,16 @@
 # exits 75. Whether it is held, the holder's record, and a problem with the folder of
 # the lock file, if one was found (a folder that is not there is not checked):
 # python3 tools/suite_lock.py status
-# The whole gate of the PUBLIC composition (the default `uv sync`: the kernel and its own
+# The whole gate of the public kernel (the default `uv sync`: the kernel and its own
 # providers, no plugin package), under the suite lock of this machine and OS user. It also
-# asserts the shipped tree names no internal provider (`assert-public-tree`).
+# asserts the tracked tree names no internal provider (`assert-public-tree`).
 check:
     python3 tools/suite_lock.py run -- {{quote(just_executable())}} --justfile {{quote(justfile())}} _check
 
 # The gate itself. Run it through `just check`, which takes the suite lock first: the
 # first line ends the recipe with exit 77 when no run above it holds the lock. The second
-# refuses an environment that holds a provider plugin, so the public gate never runs as the
-# internal one by accident (`uv sync --all-extras` restores the public environment).
+# refuses an environment that holds a provider plugin, so this gate never runs in a plugin's
+# composition by accident (`uv sync --all-extras` restores the public environment).
 _check:
     python3 tools/suite_lock.py require
     uv run --no-sync python tools/assert_composition.py public
@@ -24,24 +24,6 @@ _check:
     uv run ty check src
     uv run pytest
     {{quote(just_executable())}} --justfile {{quote(justfile())}} assert-public-tree
-
-# The whole gate of the INTERNAL composition: the kernel plus the plugin packages of the
-# `internal` dependency group (`uv sync --all-extras --group internal`), their tests included.
-# The kernel suite and each package's suite are separate pytest runs: each has its own
-# rootdir and `[tool.pytest.ini_options]`, and both carry a `tests/conftest.py` that the
-# default import mode would register under the one module name `conftest`, so the kernel
-# tests' `from conftest import ...` would reach the plugin's in a combined run.
-check-internal:
-    python3 tools/suite_lock.py run -- {{quote(just_executable())}} --justfile {{quote(justfile())}} _check-internal
-
-_check-internal:
-    python3 tools/suite_lock.py require
-    uv run --no-sync python tools/assert_composition.py internal
-    uv run ruff check .
-    uv run ruff format --check .
-    uv run ty check src packages/*/src
-    uv run pytest
-    for suite in packages/*/tests; do uv run pytest "$suite" || exit 1; done
 
 # The whole test suite alone, under the same lock as `just check`.
 test:
@@ -72,17 +54,13 @@ ci *args:
     mkdir -p .act-artifacts
     python3 tools/suite_lock.py run -- act -j check --concurrent-jobs 1 --artifact-server-path .act-artifacts "$@"
 
-# Checks the shipped tree for references that belong only to the internal plugin: the
-# kernel package, its packaging, tools, integrations, CI, tests, scripts, docs and skills.
-# Skipped here, in the combined repository, are the plugin package itself, `status/` (never
-# copied to the public repository), the workspace lock, and the two history documents
-# (CHANGELOG.md, STATUS.md) that the public repository starts afresh. The four allowlisted
-# lines are the uv workspace wiring and the retired flat keys, both removed by the split
-# (T-271) or 0.17 (T-256).
+# Checks the tracked tree for references that belong only to an internal provider plugin:
+# the kernel package, its packaging, tools, integrations, CI, tests, scripts, docs and
+# skills. Nothing is skipped: the plugin, the task ledger and the history documents of the
+# combined repository were never copied here. The two allowlisted lines are the retired flat
+# keys the kernel reads until 0.17 (T-256).
 assert-public-tree:
-    uv run --no-sync python tools/assert_public_tree.py \
-        --skip-dir packages --skip-dir status --skip-dir uv.lock \
-        --skip-dir CHANGELOG.md --skip-dir STATUS.md --skip-dir .gate-logs --skip-dir .gitignore
+    uv run --no-sync python tools/assert_public_tree.py
 
 build:
     uv build

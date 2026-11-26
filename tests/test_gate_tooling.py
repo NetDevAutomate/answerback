@@ -20,7 +20,6 @@ import pytest
 # unpacked sdist becomes a supported path.
 PROJECT = Path(__file__).resolve().parents[1]
 TY_SRC = "uv run ty check src"
-TY_INTERNAL = "uv run ty check src packages/*/src"
 COMPOSITION = "uv run --no-sync python tools/assert_composition.py"
 PUBLIC_TREE = "{{quote(just_executable())}} --justfile {{quote(justfile())}} assert-public-tree"
 PATH_ENV = "ANSWERBACK_SUITE_LOCK"
@@ -95,20 +94,11 @@ def test_just_check_is_one_command_that_runs_the_whole_gate_under_the_suite_lock
     ]
 
 
-# Step 11 of the modular split: the internal composition has its own one-command gate.
-def test_just_check_internal_is_one_command_that_runs_the_whole_gate_under_the_suite_lock() -> None:
-    (command,) = _recipe("check-internal")
-    assert command.startswith(SUITE_LOCK)
-    assert command.endswith(" _check-internal")
-    assert _recipe("_check-internal") == [
-        REQUIRE_LOCK,
-        f"{COMPOSITION} internal",
-        "uv run ruff check .",
-        "uv run ruff format --check .",
-        TY_INTERNAL,
-        "uv run pytest",
-        'for suite in packages/*/tests; do uv run pytest "$suite" || exit 1; done',
-    ]
+# The split (T-271): a provider plugin's composition is gated in the plugin's own repository,
+# so the kernel's justfile has one gate only.
+def test_the_kernel_justfile_has_no_internal_composition_gate() -> None:
+    lines = (PROJECT / "justfile").read_text().splitlines()
+    assert not [line for line in lines if line.startswith(("check-internal", "_check-internal"))]
 
 
 # red_at_pretip
@@ -116,11 +106,10 @@ def test_no_recipe_starts_a_whole_suite_outside_the_suite_lock() -> None:
     assert _recipe("test") == [f"{SUITE_LOCK}uv run pytest"]
     # `just ci` runs `just check` in a container, whose own lock file no other run shares.
     assert _recipe("ci")[-1].startswith(f"{SUITE_LOCK}act -j check ")
-    # `_check` and `_check-internal` are the recipes that start a suite with no `run` in
-    # front. Their first command ends them with exit 77 unless a run above holds the lock
-    # (fix 1, finding 8).
-    gates = _recipe("_check") + _recipe("_check-internal")
-    assert _recipe("_check")[0] == _recipe("_check-internal")[0] == REQUIRE_LOCK
+    # `_check` is the recipe that starts a suite with no `run` in front. Its first command
+    # ends it with exit 77 unless a run above holds the lock (fix 1, finding 8).
+    gates = _recipe("_check")
+    assert gates[0] == REQUIRE_LOCK
     lines = [line.strip() for line in (PROJECT / "justfile").read_text().splitlines()]
     starters = [line for line in lines if line.startswith(("uv run pytest", "act "))]
     assert [line for line in starters if line not in gates] == []
@@ -239,7 +228,8 @@ def test_private_check_recipe_runs_nothing_unless_a_run_above_holds_the_lock(
     ]
     # The public-tree assertion is the last step, through the `assert-public-tree` recipe.
     (public_tree,) = recorded[5:]
-    assert public_tree.startswith("run --no-sync python tools/assert_public_tree.py --skip-dir ")
+    # The public repository skips nothing: no plugin, ledger or history document is tracked.
+    assert public_tree == "run --no-sync python tools/assert_public_tree.py"
 
 
 # Fix 2: `just ci` runs one job at a time. red_at_pretip (c6b5a31 passes no

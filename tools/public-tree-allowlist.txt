@@ -10,9 +10,3 @@
 # two entries together.
 src/answerback_bridge/config.py:204:"aki_binary": ("aki", "binary"),
 src/answerback_bridge/config.py:205:"aki_threads": ("aki", "threads"),
-
-# The combined repository's uv wiring of the internal plugin package: the dependency group
-# and the workspace source must name the distribution. The public tree after the split has
-# no `packages/` member and neither line (the export drops them; T-179 runbook).
-pyproject.toml:64:internal = ["answerback-aki"]
-pyproject.toml:70:answerback-aki = { workspace = true }
