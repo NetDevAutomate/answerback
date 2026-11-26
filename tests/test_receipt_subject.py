@@ -25,7 +25,7 @@ from answerback_bridge.tasks import TaskStore
 
 SHA = "0123456789abcdef" * 2 + "01234567"  # a 40-character commit SHA
 DIFFERENT = "^request_id already describes different work$"
-INVALID = "^subject must be 1-256 printable characters without leading or trailing spaces$"
+INVALID = "^subject must be 1-256 printable characters without leading or trailing whitespace$"
 
 
 class SubjectAdapter(StoredAdapter):

@@ -8,7 +8,7 @@ from typing import Any
 
 MAX_SUBJECT = 256
 SUBJECT_REFUSAL = (
-    f"subject must be 1-{MAX_SUBJECT} printable characters without leading or trailing spaces"
+    f"subject must be 1-{MAX_SUBJECT} printable characters without leading or trailing whitespace"
 )
 # The subjects of the submissions being admitted, by store file and request ID. The router
 # registers one around `adapter.submit`; adapters reserve without naming a subject, and the

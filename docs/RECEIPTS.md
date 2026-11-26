@@ -115,7 +115,7 @@ answerback tasks --subject "$(git rev-parse HEAD)"
 ```
 
 A subject is 1 to 256 printable characters, with no newline, tab or other control character
-and no leading or trailing space. It is shown as the receipt's top-level `subject` field by
+and no leading or trailing whitespace. It is shown as the receipt's top-level `subject` field by
 `task`, `tasks`, `task_get` and `task_list`, and is `null` on a receipt sent without one or
 from a bridge older than this field. Once stored it never changes.
 
