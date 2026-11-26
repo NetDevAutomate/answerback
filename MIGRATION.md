@@ -64,4 +64,9 @@ pre-0.16 provider keys are still read until 0.17
 had the plugin and is reinstalled without it keeps the plugin's settings, and `doctor` shows
 that provider as `disabled`
 ([a provider that is not installed](docs/ANSWERBACK-UPGRADE.md#a-provider-that-is-not-installed)).
+From 0.16.2 a still-flat file keeps the plugin's flat keys this way only when its
+`provider_selection` names the plugin's provider; otherwise the kernel alone refuses the file
+as holding unknown keys. Before removing the plugin, run one of the commands that save the
+file ([the `config.json` layout](docs/ANSWERBACK-UPGRADE.md#the-configjson-layout) lists them)
+so it is written nested.
 Receipts, request identities, service labels and MCP server names are unchanged.
