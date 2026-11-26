@@ -381,7 +381,7 @@ The kernel alone owns the `answerback` console script. Installed as a tool from 
 
 ```sh
 uv tool install --force --editable ~/code/personal/tools/answerback[bus]
-answerback --version          # 0.16.1
+answerback --version          # 0.16.2
 answerback providers list     # the kernel's own providers
 ```
 
@@ -391,7 +391,7 @@ clone beside this one, and adds its provider to the list:
 ```sh
 uv tool install --force --editable ~/code/personal/tools/answerback[bus] \
   --with-editable ~/code/personal/tools/<plugin-repository>/packages/<provider-plugin>
-answerback --version          # 0.16.1
+answerback --version          # 0.16.2
 answerback providers list     # includes the plugin's provider on this composition
 ```
 

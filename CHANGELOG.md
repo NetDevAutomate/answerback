@@ -4,7 +4,7 @@ Notable changes to Answerback, most recent first. This file starts at the reposi
 the history of 0.16.0 and earlier, and the task ledger its codes (such as `T-252`) refer
 to, stay in the maintainers' private archive.
 
-## Unreleased
+## 0.16.2 - 2026-11-26
 
 ### Configuration
 

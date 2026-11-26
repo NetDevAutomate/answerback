@@ -42,8 +42,9 @@ copy, and the exact date is not recorded here.
 
 Versions 0.11.0+internal to 0.16.0+internal shipped through their own merge gates, recorded in
 the changelog and ledger of the maintainers' private archive; no end-to-end qualification of
-those versions is recorded below. This repository's tree prints `0.16.1` from
-`answerback --version`; 0.16.1 is the 0.16.0 kernel in a repository of its own
+those versions is recorded below. This repository's tree prints `0.16.2` from
+`answerback --version`; 0.16.1 is the 0.16.0 kernel in a repository of its own, and 0.16.2
+changes how flat keys of a provider that is not installed are read
 ([CHANGELOG.md](CHANGELOG.md)).
 
 ## What it cannot do yet

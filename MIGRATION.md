@@ -23,14 +23,14 @@ This repository has no `status/` directory. Its [CHANGELOG.md](CHANGELOG.md) sta
 
 ## Install a composition
 
-Both compositions report version `0.16.1`, and the kernel alone owns the `answerback` console
+Both compositions report version `0.16.2`, and the kernel alone owns the `answerback` console
 script. Keep the clones side by side under `~/code/personal/tools/`.
 
 The public composition, the kernel alone:
 
 ```sh
 uv tool install --force --editable ~/code/personal/tools/answerback[bus]
-answerback --version          # 0.16.1
+answerback --version          # 0.16.2
 answerback providers list     # the kernel's own providers
 ```
 
@@ -40,7 +40,7 @@ package path):
 ```sh
 uv tool install --force --editable ~/code/personal/tools/answerback[bus] \
   --with-editable ~/code/personal/tools/<plugin-repository>/packages/<provider-plugin>
-answerback --version          # 0.16.1
+answerback --version          # 0.16.2
 answerback providers list     # includes the plugin's provider on this composition
 ```
 
@@ -56,7 +56,7 @@ inside the same brackets: each `uv tool install` replaces the earlier set.
    under `~/code/personal/tools/`.
 3. `answerback stop`, then reinstall from the clones with the command above that matches the
    node's composition, with the same extras, then `answerback start` and
-   `answerback status --json`: `version` is `0.16.1`.
+   `answerback status --json`: `version` is `0.16.2`.
 
 The configuration loads unchanged. 0.16.1 reads the same `config.json` as 0.16.0, and the flat
 pre-0.16 provider keys are still read until 0.17

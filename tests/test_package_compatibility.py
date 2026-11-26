@@ -63,8 +63,8 @@ assert all(module.__name__.startswith('answerback_bridge')
 @pytest.mark.parametrize(
     "module,args,expected",
     [
-        ("answerback_bridge", ["--version"], "0.16.1"),
-        ("codex_herdr_bridge", ["--version"], "0.16.1"),
+        ("answerback_bridge", ["--version"], "0.16.2"),
+        ("codex_herdr_bridge", ["--version"], "0.16.2"),
         ("answerback_bridge.bus.cli", ["--help"], "submit"),
         ("codex_herdr_bridge.bus.cli", ["--help"], "submit"),
     ],
@@ -86,7 +86,7 @@ def test_module_entry_points(module: str, args: list[str], expected: str, tmp_pa
 def test_project_entry_points_use_canonical_package() -> None:
     project = tomllib.loads((PROJECT / "pyproject.toml").read_text())["project"]
     assert project["name"] == "answerback"
-    assert project["version"] == "0.16.1"
+    assert project["version"] == "0.16.2"
     assert project["scripts"] == {
         "answerback": "answerback_bridge.cli:main",
         "answerback-bridge": "answerback_bridge.cli:main",
