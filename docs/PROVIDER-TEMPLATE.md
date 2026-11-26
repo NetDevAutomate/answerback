@@ -18,13 +18,13 @@ uv run pytest -q tests/test_provider_conformance.py
 ```
 
 ```text
-.....                                                                    [100%]
-5 passed in 0.05s
+......                                                                   [100%]
+6 passed in 0.39s
 ```
 
 The output is from the kernel's own Kiro provider, which runs the same contract
-(`tests/test_kiro_provider_conformance.py`). Pytest parametrizes the one test over five cases
-(`plugin-shape`, `surfaces`, `config`, `store-hooks`, `receipt-reasons`); five passes mean the
+(`tests/test_kiro_provider_conformance.py`). Pytest parametrizes the one test over six cases
+(`plugin-shape`, `surfaces`, `config`, `store-hooks`, `receipt-reasons`, `subject`); six passes mean the
 plugin's declarations match the kernel's contract. They do not mean the provider's transport works.
 
 ## Package layout
@@ -151,8 +151,16 @@ class ExampleAdapter(StoredAdapter):
     ) -> TaskReceipt:
         self.require_enabled()
         guard()
-        # Provider-specific: call the native transport, persist its receipt, and return it.
-        raise NotImplementedError
+        # Reserve before sending, with the submission's subject (the provider contract).
+        row, created = self.store.reserve(
+            prepared.target_key,
+            submission.message,
+            submission.request_id,
+            {"kind": self.name},
+            subject=submission.subject,
+        )
+        # Provider-specific: when `created`, call the native transport; return the receipt.
+        return TaskReceipt.from_record(row)
 
     def matches(self, peer: Peer, receipt: TaskReceipt) -> bool:
         # Provider-specific: compare the immutable peer and receipt identities.
@@ -291,6 +299,13 @@ def test_example_provider_conformance(
 ) -> None:
     answerback_provider_conformance(answerback_provider_contract)
 ```
+
+A provider whose adapter reserves receipts also declares `subject_probe`: an async callable that
+takes a `TaskStore` and a `Submission`, submits it through the provider's adapter against that
+store with the provider's own fakes for its transport, and returns the receipt. The `subject` case
+runs it with a subject and without one and checks the receipt holds exactly what the submission
+carried; without a probe the case is skipped. The kernel's Kiro test shows one
+(`kiro_subject_probe`).
 
 Declare every surface exactly, including empty surfaces. If the provider returns store hooks, pass
 `StoreHooksConformance` with provider-owned examples:

@@ -326,11 +326,14 @@ whose plugin is not installed has no hooks: it is never reconciled and its proje
 The `answerback` distribution registers `answerback.testing.conformance` in the `pytest11`
 entry-point group, so pytest loads it wherever Answerback and pytest are installed. It runs nothing
 by itself. A provider package opts in by declaring its package contract in its `tests/conftest.py`
-and passing the fixture to one small test; pytest then parametrizes that test over five cases:
+and passing the fixture to one small test; pytest then parametrizes that test over six cases:
 `plugin-shape` (`PLUGIN_API`, the definition and config fields, the registrar's exports), `surfaces`
 (RPC, CLI, MCP and event sources callable and exact), `config` (the nested round trip and the
-unknown-provider disabled warning), `store-hooks` and `receipt-reasons` drift. The module imports
-nothing from this repository's `tests/`. The kernel's Kiro provider runs the same five cases
+unknown-provider disabled warning), `store-hooks`, `receipt-reasons` drift and `subject` (the
+declaration's `subject_probe` submits through the provider's adapter, with its own fakes, and the
+receipt must hold the submission's subject, and none for a submission without one; the case
+skips when no probe is declared). The module imports
+nothing from this repository's `tests/`. The kernel's Kiro provider runs the same six cases
 (`tests/test_kiro_provider_conformance.py`); the
 [provider package template](PROVIDER-TEMPLATE.md#opt-in-to-conformance) shows the `conftest.py`.
 
@@ -342,7 +345,7 @@ nothing from this repository's `tests/`. The kernel's Kiro provider runs the sam
 | --- | --- |
 | `Peer` | Canonical peer ID, provider, native target, project and kind; immutable native snapshot |
 | `PreparedPeer` | The selected peer plus its durable native target key |
-| `Submission` | Nonempty message, stable request ID and optional `subject`; an adapter reserves as before and the store takes the subject the router registered for that request ID, also on a thread or executor job that reserves after the admission was cancelled |
+| `Submission` | Nonempty message, stable request ID and optional `subject`; an adapter MUST pass `subject=submission.subject` to `TaskStore.reserve` (or `reserve_in_transaction`), wherever and whenever it reserves |
 | `TaskReceipt` | Persisted task identity, request ID, target, provider and validated execution state |
 | `DiscoveryPage` | Immutable peer and diagnostic collections, including incomplete/excluded providers |
 
@@ -368,6 +371,12 @@ supplies common stored-observation and resource-free defaults.
 | `matches(peer, receipt)` | Provider-specific exact matching for legacy "task for peer" lookup |
 | `poll_ids(limit)` | Bounded list needing observation; default empty for push/worker-owned updates |
 | `close()` | Stop/detach only the execution resources this adapter owns |
+
+A receipt's subject travels in the `Submission`, never in ambient state: the adapter passes
+`submission.subject` to its reservation, so a thread or executor job that reserves after the
+caller's await was cancelled still stores it. The router then refuses a receipt whose stored
+subject differs from the submission's (none where one was given, or one where none was) with
+"inspect it before sending again", and refuses a receipt reserved in another store.
 
 Preparation is not permission to send later under a changed identity. The router checks provider
 selection and the caller's routing guard. Each adapter invokes that same synchronous guard at its
