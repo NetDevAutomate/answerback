@@ -241,6 +241,7 @@ class RexService:
         *,
         expected: dict[str, Any] | None = None,
         admission_guard: Callable[[], None] | None = None,
+        subject: str | None = None,
     ) -> dict[str, Any]:
         async with self.lock:
             previous = self.previous(peer_id, message, request_id)
@@ -255,7 +256,7 @@ class RexService:
                 raise ValueError("Prepared Rex enrollment binding changed")
             if admission_guard is not None:
                 admission_guard()
-            task = self.mailbox.submit(peer_id, message, request_id)
+            task = self.mailbox.submit(peer_id, message, request_id, subject=subject)
             self.notify(peer_id)
             return task
 

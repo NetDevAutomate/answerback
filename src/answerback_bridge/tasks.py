@@ -22,7 +22,7 @@ from .retention import (
     migrate_tasks,
     read_record,
 )
-from .subjects import SUBJECT_REFUSAL, admitted_subject, settled, validate_subject
+from .subjects import SUBJECT_REFUSAL, validate_subject
 
 if TYPE_CHECKING:
     from .plugin import StoreHooks
@@ -263,8 +263,8 @@ class TaskStore:
     ) -> tuple[Task, bool]:
         """Reserve in the caller's begun transaction; never commit independently.
 
-        `subject` is stored on a new receipt; without it, the subject `admission_subject`
-        set for this request ID is. A repeat with another subject is different work.
+        `subject` is the submission's subject (`Submission.subject`), stored on a new
+        receipt; None stores none. A repeat with another subject is different work.
         """
         if not db.in_transaction:
             raise ValueError("Task reservation requires a begun transaction")
@@ -276,7 +276,7 @@ class TaskStore:
             raise ValueError("Message must contain 1–100000 characters")
         if receipt_version.names_key(metadata):
             raise ValueError(receipt_version.REFUSAL)
-        subject = admitted_subject(self.path, request_key, subject)
+        subject = validate_subject(subject)
         existing = db.execute("SELECT * FROM tasks WHERE request_key=?", (request_key,)).fetchone()
         if existing:
             task = self.decode(existing, db)
@@ -284,7 +284,6 @@ class TaskStore:
                 task, target, message, request_key, (metadata or {}).get("kind"), subject=subject
             ):
                 raise ValueError("request_id already describes different work")
-            settled(self.path, request_key)
             return task, False
         busy = db.execute(
             "SELECT id FROM tasks WHERE target=? "
@@ -319,7 +318,6 @@ class TaskStore:
             )
         row = db.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
         assert row is not None
-        settled(self.path, request_key)
         return self.decode(row, db), True
 
     def by_request(self, request_key: str) -> Task | None:

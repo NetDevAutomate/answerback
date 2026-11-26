@@ -67,6 +67,7 @@ class NativeAdapter(NativeDiscovery, StoredAdapter):
             submission.request_id,
             expected_cwd=prepared.peer.project,
             admission_guard=guard,
+            subject=submission.subject,
         )
         return TaskReceipt.from_record(self.store.get(row["id"]))
 

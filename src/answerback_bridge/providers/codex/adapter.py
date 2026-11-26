@@ -248,6 +248,7 @@ class CodexAdapter(CodexDiscovery, StoredAdapter):
             alias,
             admission_guard=guard,
             expected_project=peer.project or None,
+            subject=submission.subject,
         )
         return TaskReceipt.from_record(self.store.get(row["id"]))
 
@@ -279,6 +280,7 @@ class CodexAdapter(CodexDiscovery, StoredAdapter):
         *,
         admission_guard: Guard | None = None,
         expected_project: str | None = None,
+        subject: str | None = None,
     ) -> dict[str, Any]:
         if not self.config.provider_enabled("codex"):
             raise ValueError("Codex provider is disabled")
@@ -291,7 +293,9 @@ class CodexAdapter(CodexDiscovery, StoredAdapter):
             metadata["binding"] = "discovered"
         else:
             metadata["alias"] = alias
-        task, created = self.store.reserve(f"desktop:{thread_id}", message, request_id, metadata)
+        task, created = self.store.reserve(
+            f"desktop:{thread_id}", message, request_id, metadata, subject=subject
+        )
         if not created:
             return public_task(task)
         try:

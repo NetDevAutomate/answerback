@@ -118,6 +118,7 @@ class RexAdapter(RexDiscovery, StoredAdapter):
             submission.request_id,
             expected=prepared.peer.as_record(),
             admission_guard=guard,
+            subject=submission.subject,
         )
         return TaskReceipt.from_record(self.store.get(row["id"]))
 

@@ -82,6 +82,7 @@ class Workers(ACPWorkerRuntime):
         *,
         expected_cwd: str | None = None,
         admission_guard: Callable[[], None] | None = None,
+        subject: str | None = None,
     ) -> dict[str, Any]:
         if self.closing:
             raise BridgeError("Bridge is stopping")
@@ -105,6 +106,7 @@ class Workers(ACPWorkerRuntime):
             message,
             request_id,
             {"kind": "kiro", "alias": alias, "cwd": cwd, "completion": "acp_prompt_response"},
+            subject=subject,
         )
         if created:
             job = Job()

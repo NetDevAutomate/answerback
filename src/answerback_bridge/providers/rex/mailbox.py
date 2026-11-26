@@ -207,7 +207,9 @@ class RexMailbox:
                     (json.dumps(task["metadata"]), detail, now, task["id"]),
                 )
 
-    def submit(self, peer_id: str, message: str, request_id: str) -> Task:
+    def submit(
+        self, peer_id: str, message: str, request_id: str, *, subject: str | None = None
+    ) -> Task:
         with self.store.connection() as db:
             db.execute("BEGIN IMMEDIATE")
             peer = self._peer(db, peer_id)
@@ -234,6 +236,7 @@ class RexMailbox:
                     "completion": "cooperative_result",
                 },
                 initial_state="queued",
+                subject=subject,
             )
             return public_task(task)
 

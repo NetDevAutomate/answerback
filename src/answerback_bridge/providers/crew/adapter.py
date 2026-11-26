@@ -67,6 +67,7 @@ class CrewAdapter(CrewDiscovery, StoredAdapter):
             submission.request_id,
             prepared.peer.as_record(),
             admission_guard=guard,
+            subject=submission.subject,
         )
         return TaskReceipt.from_record(self.store.get(row["id"]))
 
@@ -91,6 +92,7 @@ class CrewAdapter(CrewDiscovery, StoredAdapter):
         expected: dict[str, Any],
         *,
         admission_guard: Guard | None = None,
+        subject: str | None = None,
     ) -> dict[str, Any]:
         from .client import CrewIdentityChanged, check_identity
 
@@ -121,6 +123,7 @@ class CrewAdapter(CrewDiscovery, StoredAdapter):
             message,
             request_id,
             {"kind": "crew", "slot": target, "peer": peer, "completion": "worker_report"},
+            subject=subject,
         )
         if not created:
             return public_task(task)

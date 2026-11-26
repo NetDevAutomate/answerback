@@ -20,7 +20,7 @@ from answerback_bridge.adapters.contracts import (
 from answerback_bridge.adapters.registry import AdapterRegistry
 from answerback_bridge.config import Config
 from answerback_bridge.service import Bridge
-from answerback_bridge.subjects import admission_subject, validate_subject
+from answerback_bridge.subjects import validate_subject
 from answerback_bridge.tasks import TaskStore
 
 SHA = "0123456789abcdef" * 2 + "01234567"  # a 40-character commit SHA
@@ -29,13 +29,19 @@ INVALID = "^subject must be 1-256 printable characters without leading or traili
 
 
 class SubjectAdapter(StoredAdapter):
-    """Reserves like a real adapter: it never passes a subject itself."""
+    """Reserves as the provider contract asks: with the submission's subject."""
 
     name = registration = "fixture"
     recovery_states = ("running",)
     sends = 0
     reserve_in_thread = False
     background_request: str | None = None
+    # As a broken adapter that does not pass the submission's subject to reserve.
+    drop_subject = False
+    # Roll back a first reservation in the executor job, then reserve again.
+    rollback_first = False
+    # Submissions whose request ID starts with this wait, unreserved, until cancelled.
+    stall_prefix: str | None = None
     # When set, reserve on an executor thread that waits for `release` first.
     release: threading.Event | None = None
     waiting = threading.Event()
@@ -62,8 +68,26 @@ class SubjectAdapter(StoredAdapter):
         return PreparedPeer("fixture:one", peer)
 
     def _reserve(self, prepared: PreparedPeer, submission: Submission) -> dict:
+        subject = None if self.drop_subject else submission.subject
+        if self.rollback_first:
+            with self.store.connection() as db:
+                db.execute("BEGIN IMMEDIATE")
+                self.store.reserve_in_transaction(
+                    db,
+                    prepared.target_key,
+                    submission.message,
+                    submission.request_id,
+                    {"kind": self.name},
+                    subject=subject,
+                )
+                db.rollback()
+            assert self.store.by_request(submission.request_id) is None
         row, created = self.store.reserve(
-            prepared.target_key, submission.message, submission.request_id, {"kind": self.name}
+            prepared.target_key,
+            submission.message,
+            submission.request_id,
+            {"kind": self.name},
+            subject=subject,
         )
         if created:
             self.sends += 1
@@ -73,6 +97,8 @@ class SubjectAdapter(StoredAdapter):
         self, prepared: PreparedPeer, submission: Submission, *, guard: Guard
     ) -> TaskReceipt:
         guard()
+        if self.stall_prefix is not None and submission.request_id.startswith(self.stall_prefix):
+            await asyncio.Event().wait()
         if self.release is not None:
             release = self.release
 
@@ -163,40 +189,6 @@ def test_same_request_with_another_subject_is_different_work(
     again, created = store.reserve("t", "Review", "r1", {"kind": "fixture"}, subject=first)
     assert not created and again["id"] == task["id"]
     assert len(store.recent()) == 1
-
-
-def test_admission_subject_applies_only_to_its_own_request(tmp_path: Path) -> None:
-    store = TaskStore(tmp_path / "tasks.sqlite")
-    with admission_subject(store.path, "r1", SHA):
-        mine, _ = store.reserve("t", "Review", "r1", {"kind": "fixture"})
-        other, _ = store.reserve("t2", "Review", "r2", {"kind": "fixture"})
-        with pytest.raises(ValueError, match="^subject conflicts with the admission subject$"):
-            store.reserve("t", "Review", "r1", {"kind": "fixture"}, subject="else")
-        elsewhere = TaskStore(tmp_path / "other" / "tasks.sqlite")
-        assert elsewhere.reserve("t", "Review", "r1", {"kind": "fixture"})[0]["subject"] is None
-    assert (mine["subject"], other["subject"]) == (SHA, None)
-    after, _ = store.reserve("t3", "Review", "r3", {"kind": "fixture"})
-    assert after["subject"] is None
-
-
-@pytest.mark.parametrize("second", ["else", None])
-def test_a_concurrent_admission_with_another_subject_is_refused(
-    tmp_path: Path, second: str | None
-) -> None:
-    path = tmp_path / "tasks.sqlite"
-    with admission_subject(path, "r1", SHA):
-        with pytest.raises(ValueError, match=DIFFERENT):
-            with admission_subject(path, "r1", second):
-                pass
-        with admission_subject(path, "r1", SHA):
-            pass
-        # The inner admission of the same subject did not end the outer one.
-        store = TaskStore(path)
-        assert store.reserve("t", "Review", "r1", {"kind": "fixture"})[0]["subject"] == SHA
-    with admission_subject(path, "r1", None):
-        with pytest.raises(ValueError, match=DIFFERENT):
-            with admission_subject(path, "r1", SHA):
-                pass
 
 
 def test_a_direct_update_of_the_subject_is_aborted(tmp_path: Path) -> None:
@@ -349,15 +341,12 @@ async def run_cancelled(bridge: Bridge, adapter: SubjectAdapter) -> None:
 async def test_an_executor_job_that_outlives_a_cancelled_admission_keeps_the_subject(
     tmp_path: Path,
 ) -> None:
-    import answerback_bridge.subjects as subjects
-
     bridge, adapter = environment(tmp_path / "config.json")
     try:
         await run_cancelled(bridge, adapter)
-        # The reviewer's harness printed `cancelled-thread-subject None` here.
+        # The reviewer's harness printed `cancelled-thread-subject None` here. The job holds
+        # the Submission, so it reserves with its subject whatever became of the await.
         assert bridge.store.by_request("r1")["subject"] == SHA
-        # The reservation settled the kept subject; the store's own rule answers from here.
-        assert not subjects._KEPT
         adapter.release = None
         with pytest.raises(ValueError, match=DIFFERENT):
             await bridge.peer_submit("fixture:one", "Review", "r1", subject="else")
@@ -365,33 +354,58 @@ async def test_an_executor_job_that_outlives_a_cancelled_admission_keeps_the_sub
         await bridge.close()
 
 
-async def test_a_cancelled_admission_keeps_its_subject_against_another(tmp_path: Path) -> None:
-    import answerback_bridge.subjects as subjects
-
-    path = tmp_path / "tasks.sqlite"
-    with admission_subject(path, "r1", SHA):
-        subjects.keep_after_cancel(path, "r1")
-    try:
-        with pytest.raises(ValueError, match=DIFFERENT):
-            with admission_subject(path, "r1", None):
-                pass
-        assert (
-            TaskStore(path).reserve("t", "Review", "r1", {"kind": "fixture"})[0]["subject"] == SHA
-        )
-        assert not subjects._KEPT
-    finally:
-        subjects.settled(path, "r1")
-
-
-async def test_a_cancelled_admission_that_had_reserved_keeps_nothing(tmp_path: Path) -> None:
-    import answerback_bridge.subjects as subjects
-
+async def test_a_cancelled_admission_that_had_reserved_keeps_its_receipt(tmp_path: Path) -> None:
     bridge, adapter = environment(tmp_path / "config.json")
     try:
         # The receipt exists before the cancellation: the store's stored subject decides.
         bridge.store.reserve("fixture:one", "Review", "r1", {"kind": "fixture"}, subject=SHA)
         await run_cancelled(bridge, adapter)
-        assert not subjects._KEPT
+        assert bridge.store.by_request("r1")["subject"] == SHA
+    finally:
+        await bridge.close()
+
+
+async def test_a_job_outliving_many_cancelled_admissions_keeps_its_subject(
+    tmp_path: Path,
+) -> None:
+    """The reviewer's overflow harness: 1,024 later cancellations evicted the kept subject
+    of a job still waiting to reserve (`cancelled-lease-overflow-subject None`)."""
+    bridge, adapter = environment(tmp_path / "config.json")
+    adapter.release, adapter.waiting = threading.Event(), threading.Event()
+    adapter.finished = threading.Event()
+    adapter.stall_prefix = "noise-"
+    try:
+        sending = asyncio.create_task(
+            bridge.peer_submit("fixture:one", "Review", "r1", subject=SHA)
+        )
+        assert await asyncio.to_thread(adapter.waiting.wait, 5)
+        sending.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await sending
+        noise = [
+            asyncio.create_task(
+                bridge.peer_submit("fixture:one", "Noise", f"noise-{index}", subject="other")
+            )
+            for index in range(1100)
+        ]
+        await asyncio.sleep(0.2)
+        for task in noise:
+            task.cancel()
+        await asyncio.gather(*noise, return_exceptions=True)
+        adapter.release.set()
+        assert await asyncio.to_thread(adapter.finished.wait, 5)
+        assert bridge.store.by_request("r1")["subject"] == SHA
+    finally:
+        await bridge.close()
+
+
+async def test_a_rolled_back_reservation_then_a_retry_keeps_the_subject(tmp_path: Path) -> None:
+    """The reviewer's rollback harness: a reservation consumed the kept subject and rolled
+    back, so the job's next reservation stored none (`post-rollback-subject None`)."""
+    bridge, adapter = environment(tmp_path / "config.json")
+    adapter.rollback_first = True
+    try:
+        await run_cancelled(bridge, adapter)
         assert bridge.store.by_request("r1")["subject"] == SHA
     finally:
         await bridge.close()
@@ -401,6 +415,7 @@ async def test_an_adapter_that_reserves_in_another_store_is_refused(tmp_path: Pa
     bridge, adapter = environment(tmp_path / "config.json")
     other = TaskStore(tmp_path / "other.sqlite")
     adapter.store = other
+    adapter.drop_subject = True  # as an adapter of this era: no subject, another store
     try:
         with pytest.raises(
             ValueError,
@@ -419,13 +434,10 @@ async def test_an_adapter_that_reserves_in_another_store_is_refused(tmp_path: Pa
 
 
 async def test_an_adapter_that_loses_the_subject_in_its_store_is_refused(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
 ) -> None:
-    import answerback_bridge.tasks as tasks
-
-    # As an adapter whose reservation does not see the router's registration.
-    monkeypatch.setattr(tasks, "admitted_subject", lambda store, key, subject: subject)
     bridge, adapter = environment(tmp_path / "config.json")
+    adapter.drop_subject = True
     try:
         with pytest.raises(ValueError, match="^Adapter reserved the receipt without its subject"):
             await bridge.peer_submit("fixture:one", "Review", "r1", subject=SHA)
@@ -435,15 +447,13 @@ async def test_an_adapter_that_loses_the_subject_in_its_store_is_refused(
 
 
 async def test_a_subjectless_repeat_returned_by_an_adapter_is_different_work(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
 ) -> None:
-    import answerback_bridge.tasks as tasks
-
     bridge, adapter = environment(tmp_path / "config.json")
     try:
         sent = await bridge.peer_submit("fixture:one", "Review", "r1")
-        # As an adapter whose own repeat check ignores the subject.
-        monkeypatch.setattr(tasks, "admitted_subject", lambda store, key, subject: subject)
+        # As an adapter that drops the subject, so the store answers with the old receipt.
+        adapter.drop_subject = True
         with pytest.raises(ValueError, match=DIFFERENT):
             await bridge.peer_submit("fixture:one", "Review", "r1", subject=SHA)
         assert bridge.store.get(sent["id"])["subject"] is None
@@ -546,25 +556,6 @@ def test_maintenance_prunes_a_receipt_with_a_subject_and_keeps_the_subject(
     pruned = store.get(task["id"])
     assert pruned["message"] == "" and pruned["result"] is None and pruned["subject"] == SHA
     assert [found["id"] for found in store.by_subject(SHA)[0]] == [task["id"]]
-
-
-def test_overlapping_admissions_keep_the_subject_until_the_last_one_ends(tmp_path: Path) -> None:
-    from contextlib import ExitStack
-
-    path = tmp_path / "tasks.sqlite"
-    store = TaskStore(path)
-    first, second = ExitStack(), ExitStack()
-    first.enter_context(admission_subject(path, "r1", SHA))
-    second.enter_context(admission_subject(path, "r1", SHA))
-    first.close()  # A ends (failed before reserving) while B is still admitting.
-    with pytest.raises(ValueError, match=DIFFERENT):
-        with admission_subject(path, "r1", "else"):
-            pass
-    task, _ = store.reserve("t", "Review", "r1", {"kind": "fixture"})
-    assert task["subject"] == SHA
-    second.close()
-    with admission_subject(path, "r1", "else"):  # nothing is held any more
-        pass
 
 
 async def test_a_repeat_admitted_while_the_first_ends_keeps_the_subject(tmp_path: Path) -> None:
@@ -683,15 +674,6 @@ def test_task_list_takes_the_newest_100_subject_matches_and_counts_all(tmp_path:
         db.execute("UPDATE tasks SET created=1 WHERE id=?", (ids[0],))
     assert bridge.task_list("findme")["tasks"] == []
     assert store.by_subject(SHA, limit=100)[1] == 102
-
-
-def test_an_admission_that_raises_releases_its_subject(tmp_path: Path) -> None:
-    path = tmp_path / "tasks.sqlite"
-    with pytest.raises(RuntimeError):
-        with admission_subject(path, "r1", SHA):
-            raise RuntimeError("adapter failed")
-    with admission_subject(path, "r1", "else"):
-        pass
 
 
 @pytest.mark.parametrize(

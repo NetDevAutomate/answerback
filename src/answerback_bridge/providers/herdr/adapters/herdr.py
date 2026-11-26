@@ -137,6 +137,7 @@ class HerdrAdapter(HerdrDiscovery, StoredAdapter):
             submission.request_id,
             prepared.peer.as_record(),
             admission_guard=guard,
+            subject=submission.subject,
         )
         return TaskReceipt.from_record(self.store.get(row["id"]))
 
@@ -166,6 +167,7 @@ class HerdrAdapter(HerdrDiscovery, StoredAdapter):
         expected: dict[str, Any],
         *,
         admission_guard: Guard | None = None,
+        subject: str | None = None,
     ) -> dict[str, Any]:
         # The annotation forbids None, but a caller can still pass it at runtime;
         # refuse it here, before any lookup, reservation or send, so the identity
@@ -215,6 +217,7 @@ class HerdrAdapter(HerdrDiscovery, StoredAdapter):
                 "agent_kind": agent_kind,
                 "agent_session": agent.get("agent_session"),
             },
+            subject=subject,
         )
         if not created:
             return public_task(task)

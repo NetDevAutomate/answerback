@@ -5,7 +5,6 @@ from collections.abc import Callable
 from pathlib import Path
 
 from ..retention import content_matches
-from ..subjects import admission_subject, keep_after_cancel
 from ..tasks import TaskStore
 from .contracts import Peer, PreparedPeer, Submission, TaskReceipt
 from .registry import AdapterRegistry
@@ -79,25 +78,13 @@ class AdapterRouter:
         # A receipt that exists already is a repeat: one the adapter returns with another
         # subject is different work, not a reservation that lost its subject.
         prior = self.store.by_request(submission.request_id)
-        # Adapters reserve without naming a subject; the store takes it from this
-        # registration for this request ID only (`subjects.admission_subject`).
-        with admission_subject(self.store.path, submission.request_id, submission.subject):
-            try:
-                returned = await adapter.submit(prepared, submission, guard=guard)
-            except asyncio.CancelledError:
-                # Cancelling the await does not stop an adapter's thread or executor job;
-                # unless it has reserved already, it still reserves with this subject.
-                try:
-                    reserved = self.store.by_request(submission.request_id) is not None
-                except Exception:  # noqa: BLE001 - keep the subject when unsure
-                    reserved = False
-                if not reserved:
-                    keep_after_cancel(self.store.path, submission.request_id)
-                raise
+        # The adapter reserves with `submission.subject` (the provider contract); the
+        # checks below refuse a receipt that does not hold it.
+        returned = await adapter.submit(prepared, submission, guard=guard)
         try:
             record = self.store.get(returned.task_id)
         except ValueError:
-            # The adapter reserved outside this store, where no subject was registered.
+            # The adapter reserved outside this store, which this router cannot check.
             raise ValueError(
                 "Adapter reserved the receipt in another store, without its subject; "
                 "inspect it before sending again"

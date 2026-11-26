@@ -120,6 +120,8 @@ class CoreTasks:
         request_id: str,
         expected: dict[str, Any] | None = None,
         admission_guard: Callable[[], None] | None = None,
+        *,
+        subject: str | None = None,
     ) -> dict[str, Any]:
         if self.closing:
             raise BridgeError("Bridge is stopping")
@@ -185,7 +187,7 @@ class CoreTasks:
                 result_machine=machine,
                 result_token=secrets.token_hex(16),
             )
-        task, created = self.store.reserve(key, message, request_id, metadata)
+        task, created = self.store.reserve(key, message, request_id, metadata, subject=subject)
         if created:
             token = task["metadata"].get("result_token")
             job = asyncio.create_task(

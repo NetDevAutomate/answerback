@@ -92,8 +92,9 @@ class PreparedPeer:
 class Submission:
     message: str
     request_id: str
-    # What the sender says the hand-off is about. The router stores it on the receipt; an
-    # adapter reserves as before and never needs to read it.
+    # What the sender says the hand-off is about. An adapter passes it to
+    # `TaskStore.reserve(..., subject=)`, so the receipt holds it; the router refuses a
+    # receipt whose subject differs from it.
     subject: str | None = None
 
     def __post_init__(self) -> None:
