@@ -207,6 +207,7 @@ def test_an_old_store_gains_the_subject_table_and_keeps_its_task_columns(tmp_pat
         before = [row[1] for row in db.execute("PRAGMA table_info(tasks)")]
         db.execute("DROP TRIGGER task_subjects_immutable")
         db.execute("DROP TRIGGER task_subjects_deleted")
+        db.execute("DROP TRIGGER task_subjects_kept")
         db.execute("DROP TABLE task_subjects")
         # A positional insert of the eleven task columns, as older code wrote them.
         db.execute(
@@ -222,7 +223,7 @@ def test_an_old_store_gains_the_subject_table_and_keeps_its_task_columns(tmp_pat
     db.close()
     assert columns == before and "subject" not in columns and version == 0
     assert {"task_subjects", "task_subjects_subject", "task_subjects_immutable"} <= names
-    assert "task_subjects_deleted" in names
+    assert {"task_subjects_deleted", "task_subjects_kept"} <= names
     TaskStore(path)  # a second open migrates nothing and does not fail
 
 
@@ -232,6 +233,21 @@ def test_deleting_a_task_removes_its_subject(tmp_path: Path) -> None:
     with store.connection() as db:
         db.execute("DELETE FROM tasks WHERE id=?", (task["id"],))
     assert store.by_subject(SHA) == ([], 0)
+    with sqlite3.connect(store.path) as db:
+        assert db.execute("SELECT count(*) FROM task_subjects").fetchone()[0] == 0
+    db.close()
+
+
+def test_a_subject_cannot_be_deleted_and_replaced_while_its_task_exists(tmp_path: Path) -> None:
+    store = TaskStore(tmp_path / "tasks.sqlite")
+    task, _ = store.reserve("t", "Review", "r1", {"kind": "fixture"}, subject=SHA)
+    with pytest.raises(sqlite3.IntegrityError, match="Task subject is immutable"):
+        with store.connection() as db:
+            db.execute("DELETE FROM task_subjects WHERE task_id=?", (task["id"],))
+            db.execute(
+                "INSERT INTO task_subjects (task_id, subject) VALUES (?, 'forged')", (task["id"],)
+            )
+    assert store.get(task["id"])["subject"] == SHA
 
 
 def test_by_subject_searches_the_whole_store_newest_first(tmp_path: Path) -> None:

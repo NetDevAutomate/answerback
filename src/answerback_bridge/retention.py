@@ -85,7 +85,7 @@ def migrate_subjects(db: sqlite3.Connection) -> None:
 
     A table rather than a `tasks` column, so the `tasks` columns that positional inserts and
     maintenance's schema check rely on are unchanged. A row is written by the reservation
-    that creates the receipt, never updated, and removed with its task.
+    that creates the receipt, never updated or deleted on its own, and removed with its task.
     """
     db.execute(
         "CREATE TABLE IF NOT EXISTS task_subjects (task_id TEXT PRIMARY KEY, subject TEXT NOT NULL)"
@@ -93,6 +93,13 @@ def migrate_subjects(db: sqlite3.Connection) -> None:
     db.execute("CREATE INDEX IF NOT EXISTS task_subjects_subject ON task_subjects(subject)")
     db.execute(
         "CREATE TRIGGER IF NOT EXISTS task_subjects_immutable BEFORE UPDATE ON task_subjects "
+        "BEGIN SELECT RAISE(ABORT, 'Task subject is immutable'); END"
+    )
+    # A subject row goes only with its task: deleting it while the task exists would let a
+    # different subject be inserted in its place.
+    db.execute(
+        "CREATE TRIGGER IF NOT EXISTS task_subjects_kept BEFORE DELETE ON task_subjects "
+        "WHEN EXISTS (SELECT 1 FROM tasks WHERE id=OLD.task_id) "
         "BEGIN SELECT RAISE(ABORT, 'Task subject is immutable'); END"
     )
     db.execute(
