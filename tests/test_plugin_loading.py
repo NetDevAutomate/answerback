@@ -524,8 +524,9 @@ def test_reserved_config_names_come_from_the_class() -> None:
     )
     assert reserved["kiro_binary"] == ("kiro", "binary")
     assert reserved["save"] is None
-    # The retired flat keys are read by the loader but are not attributes (base pin).
-    assert not set(configuration.RETIRED_FLAT_KEYS) & set(reserved)
+    # Every reserved flat name belongs to a loaded provider: the flat keys of a provider no
+    # plugin claims are read by the loader into its kept block, never made attributes.
+    assert {entry[0] for entry in reserved.values() if entry} <= set(configuration.SCHEMAS)
 
 
 def test_second_plugin_reusing_a_flat_key_is_refused_and_the_first_kept(tmp_path: Path) -> None:

@@ -1,12 +1,3 @@
 # Exact, temporary source-line exceptions only; delete each when no longer needed.
 # Paths containing ':' or starting with '#' cannot be listed and fail closed.
 # Each entry: path:line:stripped text. The reason stands in the comment above it.
-
-# Pre-0.16 flat keys of the provider that left the kernel package, read until 0.17 per
-# docs/ANSWERBACK-UPGRADE.md (an existing flat file "loads unchanged"; a kernel-only
-# installation reads a configuration written on one that had the plugin). A public-kernel
-# runtime need the plugin seam cannot carry, so the kernel keeps the two names
-# (config.RETIRED_FLAT_KEYS). T-256 (0.17 flat-key removal) deletes the table and these
-# two entries together.
-src/answerback_bridge/config.py:204:"aki_binary": ("aki", "binary"),
-src/answerback_bridge/config.py:205:"aki_threads": ("aki", "threads"),

@@ -18,13 +18,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from composition import PLUGIN_PROVIDERS, pick
+from composition import pick
 
 from answerback_bridge.adapters.builtins import builtin_plugins
 from answerback_bridge.config import (
     FLAT_KEYS,
     PROVIDERS,
-    RETIRED_FLAT_KEYS,
     SCHEMAS,
     Config,
     routing_digest,
@@ -344,38 +343,38 @@ def test_unknown_client_registration_is_kept_and_not_notified_with_a_warning(
     assert json.loads(path.read_text())["client_registrations"] == ["kiro", "fixtureprov"]
 
 
-def test_retired_flat_keys_of_a_departed_provider_still_load(
+# A provider no loaded plugin claims, selected by the file; its name holds an underscore so
+# the longest-prefix split is pinned too. A fixture name, never a real provider's.
+UNCLAIMED = "fixture_prov"
+
+
+def test_flat_keys_of_a_selected_unclaimed_provider_load_into_its_kept_block(
     tmp_path: Path, warnings: pytest.LogCaptureFixture
 ) -> None:
-    """The flat keys of the provider that left the kernel package are read until 0.17 like
-    every other flat key (docs/ANSWERBACK-UPGRADE.md: a kernel-only installation reads a
-    configuration written on one that had the plugin). With the plugin installed its schema
-    claims the same names first and its own tests pin the reading; without it the block
-    lands in `unknown_providers`, kept and disabled with one warning (S-5), and `save`
-    writes it nested under `providers.<name>` with no flat key."""
-    (provider,) = {provider for provider, _ in RETIRED_FLAT_KEYS.values()}
-    if PLUGIN_PROVIDERS:
-        assert provider in PLUGIN_PROVIDERS
-        assert {key: FLAT_KEYS[key] for key in RETIRED_FLAT_KEYS} == RETIRED_FLAT_KEYS
-        return
-    assert not set(RETIRED_FLAT_KEYS) & set(FLAT_KEYS)
-    retired = {key: f"/fixture/{key}" for key in RETIRED_FLAT_KEYS}
-    path = write(tmp_path, {"provider_selection": ["kiro", provider], **retired})
+    """A pre-0.16 flat key `<provider>_<field>` of a provider the file selects and no loaded
+    plugin claims is that provider's field (docs/ANSWERBACK-UPGRADE.md: a flat file loads
+    unchanged, so one written where the provider's plugin was installed loads without it).
+    The block lands in `unknown_providers`, kept and disabled with one warning (S-5), and
+    `save` writes it nested under `providers.<name>` with no flat key. Both compositions."""
+    assert UNCLAIMED not in SCHEMAS
+    flat = {f"{UNCLAIMED}_binary": "/fixture/bin", f"{UNCLAIMED}_threads": {"t": {"a": "b"}}}
+    path = write(tmp_path, {"provider_selection": ["kiro", UNCLAIMED], **flat})
     config = Config.load(path)
     assert [record.getMessage() for record in warnings.records] == [
         f"Bridge config at {path} names providers no loaded plugin claims; they are disabled "
-        f"and their settings are kept: {provider}"
+        f"and their settings are kept: {UNCLAIMED}"
     ]
-    assert config.unknown_providers[provider] == {
-        name: retired[key] for key, (_, name) in RETIRED_FLAT_KEYS.items()
+    assert config.unknown_providers[UNCLAIMED] == {
+        "binary": "/fixture/bin",
+        "threads": {"t": {"a": "b"}},
     }
     assert config.registered_providers() == ["kiro"]
-    assert config.disabled_providers() == [provider]
+    assert config.disabled_providers() == [UNCLAIMED]
     config.save(path)
     saved = json.loads(path.read_text())
-    assert not set(RETIRED_FLAT_KEYS) & set(saved)
-    assert saved["providers"][provider] == config.unknown_providers[provider]
-    assert Config.load(path).unknown_providers[provider] == config.unknown_providers[provider]
+    assert not set(flat) & set(saved)
+    assert saved["providers"][UNCLAIMED] == config.unknown_providers[UNCLAIMED]
+    assert Config.load(path).unknown_providers[UNCLAIMED] == config.unknown_providers[UNCLAIMED]
 
 
 def test_select_provider_keeps_unknown_names_but_refuses_to_select_one() -> None:

@@ -4,6 +4,22 @@ Notable changes to Answerback, most recent first. This file starts at the reposi
 the history of 0.16.0 and earlier, and the task ledger its codes (such as `T-252`) refer
 to, stay in the maintainers' private archive.
 
+## Unreleased
+
+### Configuration
+
+- **The flat keys of a provider that is not installed are read by one generic rule.** A
+  pre-0.16 flat key `<name>_<field>` that no loaded provider claims is read as the field
+  `<field>` of the provider `<name>` when the same file's `provider_selection` names that
+  provider. The block is then kept and disabled with the one warning of
+  [a provider that is not installed](docs/ANSWERBACK-UPGRADE.md#a-provider-that-is-not-installed),
+  and the first save writes it nested under `providers.<name>` with no flat key left. When
+  the file also carries the nested value, the nested value wins and the same warning about
+  shadowed flat keys is printed. A flat key whose prefix is neither a loaded provider nor a
+  name the file selects is still refused as an unknown key. The kernel no longer keeps a
+  table of one departed provider's flat key names, and `tools/public-tree-allowlist.txt`
+  lists no exception.
+
 ## 0.16.1 - 2026-11-26
 
 ### The repository split

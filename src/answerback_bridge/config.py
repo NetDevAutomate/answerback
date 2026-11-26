@@ -6,7 +6,7 @@ import os
 import stat
 import tempfile
 from collections import deque
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import MISSING, asdict, dataclass, field, fields, replace
 from pathlib import Path
 from typing import Any, Generic, TypeVar, overload
@@ -196,14 +196,22 @@ _KERNEL_FIELDS = (
 _VALIDATED_BEFORE_KERNEL = ("codex_cli", "claude_code", "grok", "rex")
 _VALIDATED_AFTER_KERNEL = ("herdr", "codex", "kiro", "crew", "hc")
 
-# Flat keys of providers that left the kernel package: read until 0.17 like every other
-# flat key, so a pre-0.16 file loads when the provider's plugin is absent (its block then
-# lands in `unknown_providers`, kept and disabled, decision S-5) and when it is present (its
-# schema's `flat_keys()` claims the same names first).
-RETIRED_FLAT_KEYS: dict[str, tuple[str, str]] = {
-    "aki_binary": ("aki", "binary"),
-    "aki_threads": ("aki", "threads"),
-}
+
+def _unclaimed_flat_key(key: str, selected: Sequence[str]) -> tuple[str, str] | None:
+    """The block and field a pre-0.16 flat key of a provider no loaded plugin claims names.
+
+    ``selected`` holds the file's own ``provider_selection`` entries that no loaded schema
+    claims. A key ``<provider>_<field>`` whose prefix is one of them is that provider's
+    field: its block lands in ``unknown_providers``, kept and disabled (decision S-5), so a
+    flat file written where the provider's plugin was installed still loads without it. The
+    longest matching name wins (a provider name may hold ``_``). Any other key is left to the
+    caller, which refuses one no field claims, so a mistyped key is still an error.
+    """
+    for provider in sorted(selected, key=len, reverse=True):
+        prefix = f"{provider}_"
+        if key.startswith(prefix) and len(key) > len(prefix):
+            return provider, key[len(prefix) :]
+    return None
 
 
 class _Flat(Generic[_T]):
@@ -506,13 +514,23 @@ class Config:
                 shaped(f"providers.{provider}.{name}", SCHEMAS.get(provider), name, value)
         values: dict[str, Any] = {}
         shadowed: list[str] = []
+        selection = raw.get("provider_selection")
+        unclaimed = (
+            [name for name in selection if isinstance(name, str) and name not in SCHEMAS]
+            if isinstance(selection, list)
+            else []
+        )
+        kernel_fields = {item.name for item in fields(cls) if item.init}
         for key, value in raw.items():
             if key == "providers":
                 continue
-            if key in FLAT_KEYS or key in RETIRED_FLAT_KEYS:
+            routed = FLAT_KEYS.get(key) or (
+                None if key in kernel_fields else _unclaimed_flat_key(key, unclaimed)
+            )
+            if routed is not None:
                 # Read until 0.17 (CHANGELOG): a flat key fills its block's field unless the
                 # file already carries the nested twin, which then wins.
-                provider, name = FLAT_KEYS.get(key) or RETIRED_FLAT_KEYS[key]
+                provider, name = routed
                 block = blocks.setdefault(provider, {})
                 if name in block:
                     shadowed.append(key)
