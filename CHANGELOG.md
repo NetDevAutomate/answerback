@@ -1,0 +1,41 @@
+# Changelog
+
+Notable changes to Answerback, most recent first. This file starts at the repository split;
+the history of 0.16.0 and earlier, and the task ledger its codes (such as `T-252`) refer
+to, stay in the maintainers' private archive.
+
+## 0.16.1 - 2026-11-26
+
+### The repository split
+
+- **This repository is the public Answerback kernel.** It was created as a fresh history
+  from the combined source tree at `1370511d0c9c4f992f79955033eeef6dc9b382bf`, not as a
+  rewrite of that history. It holds the `answerback` distribution: the kernel, which names
+  no provider, its own providers (`codex`, `codex_cli`, `claude_code`, `grok`, `kiro`,
+  `crew`, `rex`, `hc`, `herdr`), the optional `bus` module, the shipped skills, the
+  documentation and the test suite. A provider plugin is a separate distribution that is
+  installed alongside the kernel and pins its version
+  ([the compositions](docs/ANSWERBACK-UPGRADE.md#choose-a-composition)).
+- **Earlier history is in the maintainers' private archive.** The changelog of 0.16.0 and
+  earlier versions, the task ledger and its evidence were not copied here. Versions before
+  this one carried a `+internal` suffix in the combined tree; 0.16.1 has none.
+- **What changed in the code: nothing a user sees.** 0.16.1 is the 0.16.0 kernel with its
+  version, packaging and gate made for a repository of its own: `uv sync` and `just check`
+  are the whole gate, and `just assert-public-tree` checks the tracked tree with nothing
+  skipped. [MIGRATION.md](MIGRATION.md) says how an installation moves to it.
+
+### Carried over from 0.16.0
+
+The 0.16.0 entry of the old changelog sends an existing installation to
+[Upgrade to 0.16](docs/ANSWERBACK-UPGRADE.md#upgrade-to-016-provider-plugins-and-the-config-layout)
+first. Three of the facts it lists there hold for this kernel as they did for 0.16.0:
+
+- **The `config.json` layout.** In the old entry's words: "the new `config.json` layout
+  (loads unchanged, rewritten on the first save, not readable by 0.15)". "Flat provider keys
+  are read until 0.17; written nested from 0.16."
+- **A provider that is not installed is disabled, not refused.** "the disabled-not-refused
+  rule for a provider that is not installed": "A `providers.<name>` block or
+  `provider_selection` entry no loaded plugin claims is disabled with one warning at load,
+  kept through saves and listed as `disabled` in `status`/`doctor`, never a refusal".
+- **The fleet recipe.** "the per-host fleet recipe that stands in until `answerback fleet
+  upgrade` (T-252) exists".
