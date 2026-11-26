@@ -158,6 +158,13 @@ with the settings it had. This is how a kernel-only installation reads a configu
 written on one that had a plugin, and how the project's own fleet fixtures (most of which
 name a plugin provider) load on the public gate.
 
+A pre-0.16 flat key of such a provider, `<name>_<field>`, is read as the field `<field>` of
+its kept block when the same file's `provider_selection` names the provider, and saved
+nested like the rest of the block. A flat key whose prefix is neither a loaded provider nor
+a name the file selects stays an unknown key, and the file is refused, so a mistyped key is
+still caught. To load such a file on a kernel-only installation, load and save it once on
+an installation that has the plugin, or move the keys into a `providers.<name>` block.
+
 A plugin the loader refuses (wrong `api_version`, a config flat key that shadows a kernel
 name or one another provider claims, a missing `registration_binary_field` key) is skipped
 with a warning naming its entry point, and its provider then reads as disabled by the rule
