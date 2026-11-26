@@ -342,7 +342,7 @@ nothing from this repository's `tests/`. The kernel's Kiro provider runs the sam
 | --- | --- |
 | `Peer` | Canonical peer ID, provider, native target, project and kind; immutable native snapshot |
 | `PreparedPeer` | The selected peer plus its durable native target key |
-| `Submission` | Nonempty message and stable request ID |
+| `Submission` | Nonempty message, stable request ID and optional `subject`; an adapter reserves as before and the store takes the subject the router registered for that request ID |
 | `TaskReceipt` | Persisted task identity, request ID, target, provider and validated execution state |
 | `DiscoveryPage` | Immutable peer and diagnostic collections, including incomplete/excluded providers |
 

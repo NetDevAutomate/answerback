@@ -91,15 +91,47 @@ Four guarantees hold on every route:
   is never re-sent automatically. The recipient stays reserved until a person releases it with
   `abandon --reason`, which does not cancel execution and keeps the earlier outcome in an audit
   record. Where the recipient reports its own result, matching evidence can also settle it.
-- **One receipt per request ID.** Sending the same request ID again with the same message to the
-  same peer returns the existing receipt and runs nothing twice. The same ID with a different
-  message or a different peer is refused with `request_id already describes different work`.
+- **One receipt per request ID.** Sending the same request ID again with the same message and
+  subject to the same peer returns the existing receipt and runs nothing twice. The same ID with
+  a different message, a different peer or a different subject (one present and one absent
+  counts as different) is refused with `request_id already describes different work`.
   A request ID is 1 to 128 characters from letters, digits, `.`, `:`, `_` and `-`.
 - **Right recipient.** For a terminal or chat, discovery returns a binding, a fingerprint of who is
   there. Send with it, and the bridge refuses if someone else is there now. An owned worker has
   no binding.
 - **Permissions stay with you.** A worker's permission request pauses the task in `blocked` until
   a person answers with `answerback permission-answer`. No MCP tool can answer one.
+
+## Name what a hand-off is about
+
+`send --subject <text>` (the `subject` argument of `peer_submit` over MCP) stores a subject on
+the receipt: what you say the work concerns, such as the commit SHA a review is of, an artifact
+digest, a release tag or a document ID.
+
+```sh
+answerback send codex_cli:reviewer --request-id review-1 --subject "$(git rev-parse HEAD)" \
+  --message-file brief.md
+answerback tasks --subject "$(git rev-parse HEAD)"
+```
+
+A subject is 1 to 256 printable characters, with no newline, tab or other control character
+and no leading or trailing space. It is shown as the receipt's top-level `subject` field by
+`task`, `tasks`, `task_get` and `task_list`, and is `null` on a receipt sent without one or
+from a bridge older than this field. Once stored it never changes.
+
+`tasks --subject <text>` and `task_list` with `subject` return the receipts whose subject is
+exactly that text, newest first, from every receipt in the store rather than only the latest
+100; a keyword query still narrows them. The result's `subject_matches` counts every receipt
+with that subject before the keyword query and the limit, so you can tell when some were left
+out. The match is exact and case-sensitive: a short SHA does not find a full one, so expand it
+first with `git rev-parse`.
+
+The bridge never checks a subject. It is not added to the message, so the recipient does not
+see it unless your message says it, and nothing compares it with a repository, a file or a
+digest. A `completed` receipt with subject `abc123` proves only that the recipient's result came
+back for a request you labelled `abc123`. A subject is kept as long as the receipt, also after
+maintenance prunes the message and result, so do not put a secret in it. Hand-offs through the
+bus carry no subject yet.
 
 ## Two receipts on the bus
 
@@ -112,7 +144,7 @@ describe the command receipt, and only a task receipt in `completed` means done
 
 ## What a receipt holds, and what it leaves out
 
-The printed receipt carries the request key, the target, the status, the result, a `detail`
+The printed receipt carries the request key, the subject, the target, the status, the result, a `detail`
 field with the reason for a failure or an uncertain end, and a `metadata` block. It never
 includes the message you sent, and for a remote result file it leaves out the file's path and
 token. Remote result files come from machines listed in `hc_send_machines`, an Experimental

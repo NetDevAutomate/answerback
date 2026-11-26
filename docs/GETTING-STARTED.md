@@ -96,7 +96,8 @@ against that account's usage like any other session. With Codex CLI as the worke
 
 ```sh
 answerback workspace add reviewer --provider codex_cli --cwd "$PWD"
-answerback send codex_cli:reviewer --request-id hello-1 --message "Reply exactly ANSWERBACK_OK."
+answerback send codex_cli:reviewer --request-id hello-1 --subject hello \
+  --message "Reply exactly ANSWERBACK_OK."
 answerback task --peer codex_cli:reviewer --wait 30
 ```
 
@@ -124,10 +125,15 @@ for a completed receipt, which reads like this (three of its fields):
 }
 ```
 
+`--subject` is optional. It labels the receipt with what the work is about, here the word
+`hello`; for real work it is usually the commit SHA under review, and `answerback tasks
+--subject <text>` finds every receipt with it ([Receipts](RECEIPTS.md#name-what-a-hand-off-is-about)).
+The bridge stores it and never checks it.
+
 A receipt that reads `completed` with `ANSWERBACK_OK` is a live model round trip through a
 worker, on your machine and on this version. The receipt never includes the message you sent.
 Sending the same request ID again returns the same receipt and runs nothing twice; the same ID
-with a different message, or for a different peer, is refused.
+with a different message or subject, or for a different peer, is refused.
 
 A real task can take longer than thirty seconds. A wait that runs out exits `3` and cancels
 nothing: run the same `task` command

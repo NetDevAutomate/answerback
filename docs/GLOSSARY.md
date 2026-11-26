@@ -178,7 +178,7 @@ such as `codex_cli:reviewer`. See: [Harnesses](HARNESSES.md#pick-a-recipient).
 ### Request ID
 
 The caller-chosen key for one hand-off. Reusing it returns the existing receipt; a different
-message or recipient, or on the bus a different TTL, under the same key is refused rather than sent again. See:
+message, recipient or subject, or on the bus a different TTL, under the same key is refused rather than sent again. See:
 [Receipts](RECEIPTS.md#done-is-not-evidence).
 
 ### Route
@@ -196,6 +196,15 @@ receive a new assignment now. The agent qualifies when it reports `idle`, or `do
 do peers on another machine unless that machine is listed in `hc_send_machines`. The field beside
 it, `send_readiness_reason`, says why a peer is not ready. See:
 [Recipients](RECIPIENTS.md#herdr-appcore-readiness).
+
+### Subject
+
+Optional text the sender stores on a receipt to say what the hand-off is about, such as a commit
+SHA, an artifact digest or a release tag: 1 to 256 printable characters, set with `send
+--subject` or the `subject` argument of `peer_submit`, and never changed afterwards. `tasks
+--subject` finds the receipts with exactly that subject. The bridge never checks a subject
+against anything, and it proves nothing about the work. See:
+[Receipts](RECEIPTS.md#name-what-a-hand-off-is-about).
 
 ### Uncertain
 
