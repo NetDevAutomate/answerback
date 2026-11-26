@@ -887,9 +887,10 @@ class TaskStore:
 
         Returns at most `limit` receipts and the count of all receipts with the subject.
         """
-        subject = validate_subject(subject)
-        if subject is None:
+        checked = validate_subject(subject)
+        if checked is None:
             raise ValueError(SUBJECT_REFUSAL)
+        subject = checked
         if not 1 <= limit <= 100:
             raise ValueError("limit must be between 1 and 100")
         with self.connection() as db:
