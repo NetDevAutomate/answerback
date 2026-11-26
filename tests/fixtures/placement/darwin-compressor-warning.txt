@@ -1,0 +1,15 @@
+os=Darwin
+cores=14
+load= 6.85 5.24 4.72
+procs=758
+largest_kb=3923888
+largest_name=backupd
+harness_procs=5
+suites=0
+mem_total_kb=67108864
+pressure=2
+mem_level=49
+swap=total = 0.00M  used = 0.00M  free = 0.00M  (encrypted)
+page_bytes=16384
+compressor_pages=1818222
+probe_end=1

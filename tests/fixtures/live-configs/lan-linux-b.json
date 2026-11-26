@@ -1,0 +1,27 @@
+{
+  "herdr_session": null,
+  "herdr_binary": "herdr",
+  "codex_binary": "codex",
+  "desktop_threads": {},
+  "codex_home": "/home/user/.codex",
+  "kiro_binary": "kiro-cli",
+  "kiro_workspaces": {},
+  "crew_binary": "kirocrew",
+  "crew_enabled": false,
+  "crew_port": null,
+  "hc_enabled": true,
+  "hc_binary": "/home/user/.local/bin/hc",
+  "hc_session": null,
+  "codex_enabled": false,
+  "provider_selection": [
+    "hc"
+  ],
+  "client_registrations": [
+    "claude",
+    "codex",
+    "kiro-crew",
+    "grok"
+  ],
+  "heartbeat_interval": 10,
+  "heartbeat_misses": 3
+}

@@ -1,0 +1,109 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "answerback"
+version = "0.16.0+internal"
+description = "A local agent collaboration service with optional durable NATS delivery"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Andy Taylor" }]
+requires-python = ">=3.11,<3.16"
+dependencies = [
+    "agent-client-protocol==1.0.0",
+    "argcomplete>=3.6,<4",
+    "httpx2>=2.16,<3",
+    "mcp==2.3.0",
+    "tomlkit>=0.13,<1",
+]
+
+# The agent bus is opt-in: its NATS client ships as the `bus` extra and the package
+# imports it only on the bus paths, so a core install keeps `answerback --help` working.
+[project.optional-dependencies]
+bus = ["nats-py==2.16.0", "psutil>=7,<8"]
+claude = ["claude-agent-sdk==0.2.182"]
+debug = ["psutil>=7,<8"]
+
+[project.scripts]
+answerback = "answerback_bridge.cli:main"
+answerback-bridge = "answerback_bridge.cli:main"
+herdr-bridge = "answerback_bridge.cli:main"
+codex-herdr = "answerback_bridge.cli:main"
+agent-bus = "answerback_bridge.bus.cli:main"
+
+[project.entry-points."answerback.providers"]
+kiro = "answerback_bridge.providers.kiro:kiro_plugin"
+codex = "answerback_bridge.providers.codex:codex_plugin"
+crew = "answerback_bridge.providers.crew:crew_plugin"
+hc = "answerback_bridge.providers.herdr:hc_plugin"
+herdr = "answerback_bridge.providers.herdr:herdr_plugin"
+rex = "answerback_bridge.providers.rex:rex_plugin"
+codex_cli = "answerback_bridge.providers.native:codex_cli_plugin"
+claude_code = "answerback_bridge.providers.native:claude_code_plugin"
+grok = "answerback_bridge.providers.native:grok_plugin"
+
+[project.entry-points."answerback.modules"]
+bus = "answerback_bridge.bus.plugin:bus_plugin"
+
+[project.entry-points.pytest11]
+answerback_conformance = "answerback.testing.conformance"
+
+[dependency-groups]
+dev = [
+    "playwright>=1.56,<2",
+    "pytest>=8,<10",
+    "pytest-asyncio>=1,<2",
+    "ruff>=0.14,<1",
+    "ty==0.0.84",
+]
+# The internal composition: the internal provider plugin, installed editable from this
+# workspace (`uv sync --group internal`; `just check-internal`). The default sync is the
+# public kernel.
+internal = ["answerback-aki"]
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+answerback-aki = { workspace = true }
+
+# The source distribution is an allowlist: maintainer tooling (pre-commit and secret-scanner
+# configuration, local notes) never ships.
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/tests",
+    "/skills",
+    "/docs",
+    "/scripts",
+    "/tools",
+    "/CHANGELOG.md",
+    "/VALIDATION.md",
+    "/assets",
+    "/install.sh",
+    "/uv.lock",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/answerback", "src/answerback_bridge", "src/codex_herdr_bridge"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"skills/herdr-collaboration" = "answerback_bridge/data/skills/herdr-collaboration"
+
+"skills/answerback-collaboration" = "answerback_bridge/data/skills/answerback-collaboration"
+
+"skills/answerback-fleet" = "answerback_bridge/data/skills/answerback-fleet"

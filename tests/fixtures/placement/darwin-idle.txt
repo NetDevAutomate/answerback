@@ -1,0 +1,15 @@
+os=Darwin
+cores=16
+load= 3.71 3.86 4.01
+procs=1041
+largest_kb=8981584
+largest_name=python
+harness_procs=8
+suites=0
+mem_total_kb=134217728
+pressure=1
+mem_level=96
+swap=total = 0.00M  used = 0.00M  free = 0.00M  (encrypted)
+page_bytes=16384
+compressor_pages=0
+probe_end=1

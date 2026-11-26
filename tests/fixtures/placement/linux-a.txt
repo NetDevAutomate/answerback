@@ -1,0 +1,14 @@
+os=Linux
+cores=16
+load=2.11 1.77 1.77
+procs=706
+largest_kb=3485400
+largest_name=frigate.embeddi
+harness_procs=6
+suites=1
+memtotal_kb=64092432
+memavailable_kb=45446832
+swaptotal_kb=524284
+swapfree_kb=503504
+psi_some_avg10=0.00
+probe_end=1

@@ -1,0 +1,14 @@
+os=Linux
+cores=16
+load=0.34 0.39 0.43
+procs=641
+largest_kb=2491996
+largest_name=python
+harness_procs=2
+suites=0
+memtotal_kb=64092288
+memavailable_kb=53460212
+swaptotal_kb=8388604
+swapfree_kb=8363332
+psi_some_avg10=0.00
+probe_end=1

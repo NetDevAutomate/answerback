@@ -1,0 +1,79 @@
+usage: answerback [-h] [--config CONFIG] [--version]
+                  {maintenance,bus,actors,route,workers,capacity,rebalance,fleet,events,debug,pressure,completion,mcp,doctor,clients,skill,providers,notify,notification-status,desktop-sessions,send-desktop,read-desktop,crew-configure,crew-create,read-crew,hc-configure,read-hc,send-herdr,read-herdr,kiro-register,kiro-sessions,rex-configure,read-rex,rex-enroll,rex-receive,rex-ack,rex-complete,rex-retire,peers,self-test,live-test,workspace,config,find,send,tasks,permissions,permission-answer,cancel,mcp-config,serve,start,restart,stop,status,logs,reset,configure,pair,task,complete,abandon,install,uninstall,herdr-app} ...
+
+Local coordination for coding agents
+
+positional arguments:
+  {maintenance,bus,actors,route,workers,capacity,rebalance,fleet,events,debug,pressure,completion,mcp,doctor,clients,skill,providers,notify,notification-status,desktop-sessions,send-desktop,read-desktop,crew-configure,crew-create,read-crew,hc-configure,read-hc,send-herdr,read-herdr,kiro-register,kiro-sessions,rex-configure,read-rex,rex-enroll,rex-receive,rex-ack,rex-complete,rex-retire,peers,self-test,live-test,workspace,config,find,send,tasks,permissions,permission-answer,cancel,mcp-config,serve,start,restart,stop,status,logs,reset,configure,pair,task,complete,abandon,install,uninstall,herdr-app}
+    maintenance         Preview or explicitly maintain local SQLite history
+    bus                 Durable delivery and live monitoring
+    actors              Administer explicitly enrolled project actors
+    route               Classify a brief, pick or create a worker, and submit
+                        it
+    workers             Create, list and remove managed workers
+    capacity            Measure machine capacity and suggest placement
+    rebalance           Preview at most one move of a worker to another
+                        machine; changes nothing
+    fleet               Publish the fleet document for the Herdr App
+    events              Follow the observe-only AG-UI 1.0 event stream
+    debug               Temporarily trace a local task or peer
+    pressure            Show provider rate pressure, or clear one account's
+                        hold
+    completion          Print tab-completion setup for your shell
+    mcp                 Run the local STDIO MCP server
+    doctor              Check configured provider connections
+    clients             Register MCP connections in coding clients
+    skill               Install the collaboration skill and the setup skill
+    providers           Opt in to specific bridge providers
+    notify              Queue an addressed client-inbox notification
+    notification-status
+                        Read a passive notice's client acknowledgement
+    desktop-sessions    Browse indexed Desktop/IDE chats
+    send-desktop        Submit work to desktop
+    crew-configure      Enable authenticated local Kirocrew access
+    crew-create         Create a dedicated Kirocrew project chat
+    read-crew           Read bounded Kirocrew chat history
+    hc-configure        Enable Herdr App/core discovery and delivery
+    read-hc             Read an explicit core terminal
+    send-herdr          Submit work to herdr
+    kiro-register       Alias for workspace add; Crew is configured separately
+    kiro-sessions       Search saved Kiro session metadata
+    rex-configure       Probe and configure a local Rex endpoint
+    read-rex            Read an explicit Rex terminal snapshot
+    rex-enroll          Enroll an explicit cooperative conversation
+    rex-receive         Fetch queued messages before acknowledging
+    rex-ack             Acknowledge one exact received task
+    rex-complete        Record a correlated Rex result
+    rex-retire          Retire enrollment before a new conversation
+    peers               List peers across configured providers
+    self-test           Verify bidirectional collaboration
+    live-test           Legacy Herdr TUI test; Herdr App uses the attended hc
+                        checklist in docs/LIVE-TEST.md
+    workspace           Manage named native CLI project workspaces
+    config              Find or archive old bridge configurations
+    find                Find peers by name or project keywords
+    send                Submit to a unique peer name or project match
+    tasks               Find recent task receipts by peer keywords
+    mcp-config          Print a STDIO MCP entry
+    serve               Run the shared bridge in the foreground
+    start               Start the bridge service
+    restart             Restart the bridge service
+    stop                Stop only the bridge service
+    status              Service state and last provider observations
+    logs                Read body-free operational logs
+    reset               Clear connection observations; retain all receipts
+    configure           Create explicit local pairing configuration
+    pair                Explicitly pair a Desktop chat
+    complete            Record a completed Herdr task's result
+    abandon             Release a receipt after manual investigation; does NOT
+                        cancel execution
+    install             Legacy Herdr TUI and Codex connection installer
+    herdr-app           Install the Herdr App side panel (the fleet column)
+                        and the themes
+
+options:
+  -h, --help            show this help message and exit
+  --config CONFIG       Bridge config file (resolves to
+                        /home/user/.config/answerback/config.json on this
+                        machine)
+  --version             show program's version number and exit

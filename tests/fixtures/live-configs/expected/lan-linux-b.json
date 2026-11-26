@@ -1,0 +1,56 @@
+{
+  "fields": {
+    "claude_code_active_budget": 600,
+    "claude_code_binary": "claude",
+    "claude_code_home": null,
+    "claude_code_workspaces": {},
+    "client_registrations": [
+      "claude",
+      "codex",
+      "kiro-crew",
+      "grok"
+    ],
+    "codex_binary": "codex",
+    "codex_cli_active_budget": 600,
+    "codex_cli_binary": "codex",
+    "codex_cli_home": null,
+    "codex_cli_workspaces": {},
+    "codex_enabled": false,
+    "codex_home": "/home/user/.codex",
+    "crew_binary": "kirocrew",
+    "crew_enabled": false,
+    "crew_port": null,
+    "desktop_threads": {},
+    "grok_active_budget": 600,
+    "grok_binary": "grok",
+    "grok_home": null,
+    "grok_workspaces": {},
+    "hc_binary": "/home/user/.local/bin/hc",
+    "hc_enabled": true,
+    "hc_events": false,
+    "hc_placement_policy": null,
+    "hc_send_machines": [],
+    "hc_send_to_done": false,
+    "hc_session": null,
+    "heartbeat_interval": 10,
+    "heartbeat_misses": 3,
+    "herdr_binary": "herdr",
+    "herdr_session": null,
+    "kiro_acp_engine": "v3",
+    "kiro_active_budget": 600,
+    "kiro_binary": "kiro-cli",
+    "kiro_trust_all_tools": false,
+    "kiro_trust_tools": [],
+    "kiro_workspaces": {},
+    "provider_selection": [
+      "hc"
+    ],
+    "rex_binary": "rex",
+    "rex_enabled": false,
+    "rex_host_id": null,
+    "rex_server": null
+  },
+  "registered_providers": [
+    "hc"
+  ]
+}

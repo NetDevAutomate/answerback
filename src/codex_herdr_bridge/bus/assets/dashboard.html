@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Answerback · Live monitor</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="alternate icon" href="/favicon.ico" />
+    <link rel="stylesheet" href="/dashboard.css" />
+    <script src="/dashboard.js" defer></script>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div class="brand">
+          <img
+            class="brand-logo"
+            src="/favicon.svg"
+            width="28"
+            height="28"
+            alt=""
+          /><span>ANSWERBACK <b>/</b> OBSERVATORY</span>
+        </div>
+        <span class="local-label"
+          ><span class="lock" aria-hidden="true">◇</span> PRIVATE · LOCAL</span
+        >
+      </header>
+      <section class="hero">
+        <div>
+          <p class="eyebrow">WORK, IN VIEW</p>
+          <h1>Answerback<span class="title-dot" aria-hidden="true">.</span></h1>
+          <p class="subtitle">
+            Live activity across your connected coding agents.
+          </p>
+        </div>
+        <div class="hero-actions">
+          <span id="connection" class="connection waiting" role="status"
+            ><i></i><span>Connecting</span></span
+          >
+          <div class="buttons">
+            <button id="pause" class="button">
+              <span aria-hidden="true">Ⅱ</span><span>Pause</span>
+            </button>
+            <button
+              id="debug-toggle"
+              class="button"
+              aria-pressed="false"
+              aria-controls="debug-pane"
+            >
+              <span aria-hidden="true">⌘</span><span>Debug</span>
+            </button>
+          </div>
+        </div>
+      </section>
+      <div id="notice" class="notice" role="status" hidden></div>
+      <section class="metrics" aria-label="Bus statistics">
+        <article class="metric">
+          <div class="metric-label">
+            Commands<span class="metric-icon">↗</span>
+          </div>
+          <strong data-testid="commands-count" id="commands-count">—</strong>
+          <p>Accepted into the bus</p>
+        </article>
+        <article class="metric">
+          <div class="metric-label">
+            Active<span class="metric-icon cyan">◉</span>
+          </div>
+          <strong id="active-count">—</strong>
+          <p>Waiting or in progress</p>
+        </article>
+        <article class="metric">
+          <div class="metric-label">
+            Completed<span class="metric-icon green">✓</span>
+          </div>
+          <strong id="completed-count">—</strong>
+          <p>From observed task receipts</p>
+        </article>
+        <article class="metric">
+          <div class="metric-label">
+            Needs attention<span class="metric-icon amber">!</span>
+          </div>
+          <strong id="attention-count">—</strong>
+          <p>Blocked, failed, expired or uncertain</p>
+        </article>
+      </section>
+      <section class="workspace">
+        <article class="panel timeline">
+          <header class="panel-head">
+            <div>
+              <h2>
+                Event stream <span class="live-dot" aria-hidden="true"></span>
+              </h2>
+              <p>Every step, with a traceable receipt.</p>
+            </div>
+            <span id="event-summary" class="counter">0 events</span>
+          </header>
+          <div class="filters">
+            <label class="search"
+              ><span aria-hidden="true">⌕</span
+              ><input
+                id="search"
+                aria-label="Search events"
+                placeholder="Search events, peers or IDs…"
+                autocomplete="off"
+            /></label>
+            <select id="filter" aria-label="Event filter">
+              <option value="all">All events</option>
+              <option value="command">Commands</option>
+              <option value="task">Tasks</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Event</th>
+                  <th>Peer</th>
+                  <th>Command</th>
+                  <th class="time-cell">Time</th>
+                </tr>
+              </thead>
+              <tbody id="events"></tbody>
+            </table>
+            <div id="empty" class="empty">
+              <div class="empty-symbol" aria-hidden="true">↔</div>
+              <h3>No events yet</h3>
+              <p>Your next authorised command will appear here.</p>
+            </div>
+          </div>
+          <footer class="timeline-footer">
+            <span
+              ><span class="legend-dot"></span> Metadata only · prompt and
+              result bodies stay private</span
+            ><span id="cursor-label">Cursor —</span>
+          </footer>
+        </article>
+        <aside class="side-column">
+          <article class="panel activity">
+            <div class="small-heading">
+              <h2>Activity</h2>
+              <span>LAST 60 SECONDS</span>
+            </div>
+            <div class="activity-total">
+              <strong id="activity-count">—</strong><span>events</span>
+            </div>
+            <canvas
+              id="activity-chart"
+              aria-label="Event activity over the last sixty seconds"
+              role="img"
+            ></canvas>
+            <div class="axis"><span>60s ago</span><span>Now</span></div>
+          </article>
+          <article class="panel delivery">
+            <div class="small-heading">
+              <h2>Delivery</h2>
+              <span id="pending-badge" class="mini-badge">— to publish</span>
+            </div>
+            <div id="delivery-rows"></div>
+            <div class="delivery-note">
+              <span aria-hidden="true">↳</span>
+              <p>
+                Delivery and execution are separate.<br />A bound command has a
+                task receipt.
+              </p>
+            </div>
+          </article>
+          <div class="source-note">
+            <span class="source-dot"></span>
+            <div>
+              <strong>Local lifecycle ledger</strong>
+              <p id="last-updated">Waiting for the first update</p>
+            </div>
+          </div>
+        </aside>
+      </section>
+      <section id="board" data-testid="board" class="panel board-panel">
+        <header class="panel-head">
+          <div>
+            <p class="eyebrow">THE BOARD</p>
+            <h2>Runs, peers and decisions</h2>
+            <p>One typed event stream from the bridge, shown as tables.</p>
+            <p id="board-zone" data-testid="board-zone"></p>
+          </div>
+          <span
+            id="board-status"
+            data-testid="board-status"
+            class="mini-badge"
+            role="status"
+            >CONNECTING</span
+          >
+        </header>
+        <div class="board-grid">
+        <div class="board-block">
+          <h3>Runs <span id="board-runs-count" class="board-count">0</span></h3>
+          <div class="board-controls" role="group" aria-label="Run history">
+            <button
+              id="board-window"
+              data-testid="board-window"
+              class="button"
+              type="button"
+              aria-pressed="true"
+            >
+              Last 24 h + open
+            </button>
+            <button
+              id="board-all"
+              data-testid="board-all"
+              class="button"
+              type="button"
+              aria-pressed="false"
+            >
+              All
+            </button>
+            <span id="board-runs-note" data-testid="board-runs-note" role="status"></span>
+          </div>
+          <div class="board-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Task</th>
+                  <th>Run</th>
+                  <th>Peer</th>
+                  <th>Status</th>
+                  <th>Updated</th>
+                  <th>Screen changed</th>
+                </tr>
+              </thead>
+              <tbody id="board-runs" data-testid="board-runs"></tbody>
+            </table>
+          </div>
+          <div id="board-pager" class="board-controls" role="group" aria-label="Run pages" hidden>
+            <button id="board-newer" data-testid="board-newer" class="button" type="button">
+              Newer
+            </button>
+            <span id="board-page" data-testid="board-page" role="status"></span>
+            <button id="board-older" data-testid="board-older" class="button" type="button">
+              Older
+            </button>
+          </div>
+        </div>
+        <div class="board-block">
+          <h3>Peers <span id="board-peers-count" class="board-count">0</span></h3>
+          <div class="board-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Peer</th>
+                  <th>Name</th>
+                  <th>Agent</th>
+                  <th>State</th>
+                  <th>Ready</th>
+                  <th>Run</th>
+                  <th>Tokens</th>
+                  <th>CPU %</th>
+                  <th>RSS MiB</th>
+                  <th>Children</th>
+                  <th>Since</th>
+                  <th>Health</th>
+                </tr>
+              </thead>
+              <tbody id="board-peers" data-testid="board-peers"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="board-block">
+          <h3>Decisions <span id="board-decisions-count" class="board-count">0</span></h3>
+          <div class="board-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Task</th>
+                  <th>Class</th>
+                  <th>Status</th>
+                  <th>Needed by</th>
+                  <th>Question</th>
+                </tr>
+              </thead>
+              <tbody id="board-decisions" data-testid="board-decisions"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="board-block">
+          <h3>Apply queue and HEADs <span id="board-queue-count" class="board-count">0</span></h3>
+          <div class="board-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Where</th>
+                  <th>Item</th>
+                  <th>Detail</th>
+                </tr>
+              </thead>
+              <tbody id="board-queue" data-testid="board-queue"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="board-block">
+          <h3>Stream <span id="board-events-count" class="board-count">0</span></h3>
+          <div class="board-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Event</th>
+                  <th>Task</th>
+                  <th>Run</th>
+                  <th>Detail</th>
+                </tr>
+              </thead>
+              <tbody id="board-events" data-testid="board-events"></tbody>
+            </table>
+          </div>
+        </div>
+        </div>
+        <footer class="timeline-footer">
+          <span
+            ><span class="legend-dot"></span> AG-UI 1.0 · observe only · no
+            prompt or result bodies</span
+          ><span id="board-cursor">Event —</span>
+        </footer>
+      </section>
+      <section
+        id="debug-pane"
+        data-testid="debug-pane"
+        class="panel debug-panel"
+        hidden
+      >
+        <header class="panel-head">
+          <div>
+            <p class="eyebrow">UNDER THE HOOD</p>
+            <h2>Debug inspector</h2>
+            <p>Select an event to inspect its safe metadata.</p>
+          </div>
+          <span class="mini-badge">READ ONLY</span>
+        </header>
+        <div class="debug-grid">
+          <div>
+            <h3>Monitor diagnostics</h3>
+            <pre id="diagnostics">Waiting for data</pre>
+          </div>
+          <div>
+            <h3 id="selected-title">Latest event</h3>
+            <pre id="event-detail">No event selected</pre>
+          </div>
+        </div>
+      </section>
+      <footer class="page-footer">
+        <span>LOCAL COORDINATION. VISIBLE PROGRESS.</span
+        ><span id="version-label">Answerback</span>
+      </footer>
+    </main>
+  </body>
+</html>

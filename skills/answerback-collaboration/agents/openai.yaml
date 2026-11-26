@@ -1,0 +1,4 @@
+interface:
+  display_name: "AnswerBack Collaboration"
+  short_description: "Coordinate agents across Herdr App, TUI and bridge"
+  default_prompt: "Use $answerback-collaboration to discover this project's agents and coordinate their work through the correct Herdr runtime."

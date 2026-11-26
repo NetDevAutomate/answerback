@@ -1,0 +1,82 @@
+gui/503/local.agent-bus.nats.ab8983a1c6a8c6 = {
+	active count = 0
+	path = /Users/user/Library/LaunchAgents/local.agent-bus.nats.ab8983a1c6a8c6.plist
+	type = LaunchAgent
+	state = not running
+
+	program = /opt/homebrew/bin/nats-server
+	arguments = {
+		/opt/homebrew/bin/nats-server
+		-c
+		/Users/user/.config/herdr-bridge/bus/nats.conf
+	}
+
+	working directory = /Users/user/.config/herdr-bridge/bus
+
+	stdout path = /Users/user/.config/herdr-bridge/bus/supervisor/broker.log
+	stderr path = /Users/user/.config/herdr-bridge/bus/supervisor/broker.log
+	inherited environment = {
+		SSH_AUTH_SOCK => /var/run/com.apple.launchd.zQGr1Jwe98/Listeners
+	}
+
+	default environment = {
+		PATH => /usr/bin:/bin:/usr/sbin:/sbin
+	}
+
+	environment = {
+		OSLogRateLimit => 64
+		XPC_SERVICE_NAME => local.agent-bus.nats.ab8983a1c6a8c6
+	}
+
+	LWCR = {
+		"reqs" => {
+			"cdhash" => {
+				"$in" => [
+					0 = 				]
+			}
+		}
+		"vers" => 1
+		"comp" => 1
+		"ccat" => 0
+	}
+
+	domain = gui/503 [100023]
+	umask = 77
+	asid = 100023
+	minimum runtime = 10
+	exit timeout = 10
+	runs = 1
+	last exit code = 0
+
+	semaphores = {
+		successful exit => 0
+	}
+
+	resource coalition = {
+		ID = 1360
+		type = resource
+		state = active
+		active count = 1
+		name = local.agent-bus.nats.ab8983a1c6a8c6
+	}
+
+	jetsam coalition = {
+		ID = 1361
+		type = jetsam
+		state = active
+		active count = 1
+		name = local.agent-bus.nats.ab8983a1c6a8c6
+	}
+
+	spawn type = daemon (3)
+	jetsam priority = 40
+	jetsam memory limit (active) = (unlimited)
+	jetsam memory limit (inactive) = (unlimited)
+	jetsamproperties category = daemon
+	jetsam thread limit = 32
+	cpumon = default
+	job state = exited
+	sanitizer flags = 0x0
+
+	properties = runatload | inferred program | managed LWCR | has LWCR
+}

@@ -1,0 +1,4 @@
+# fleet.py runs on Python 3.9 on LAN machines: lint and format it as py39, at the line length it was written in.
+extend = "../pyproject.toml"
+target-version = "py39"
+line-length = 110

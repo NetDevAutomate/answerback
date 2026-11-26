@@ -1,0 +1,243 @@
+=== answerback rex-configure --help
+usage: answerback rex-configure [-h] [--config CONFIG] [--binary BINARY]
+                                [--server SERVER]
+
+options:
+  -h, --help       show this help message and exit
+  --config CONFIG  Bridge config file (resolves to
+                   /home/user/.config/answerback/config.json on this machine)
+  --binary BINARY
+  --server SERVER
+=== answerback read-rex --help
+usage: answerback read-rex [-h] [--config CONFIG] --session SESSION
+                           --block BLOCK [--max-bytes MAX_BYTES]
+
+options:
+  -h, --help            show this help message and exit
+  --config CONFIG       Bridge config file (resolves to
+                        /home/user/.config/answerback/config.json on this
+                        machine)
+  --session SESSION
+  --block BLOCK
+  --max-bytes MAX_BYTES
+=== answerback rex-enroll --help
+usage: answerback rex-enroll [-h] [--config CONFIG] [--here]
+                             [--session SESSION] [--block BLOCK]
+                             --request-id REQUEST_ID
+                             name
+
+positional arguments:
+  name
+
+options:
+  -h, --help            show this help message and exit
+  --config CONFIG       Bridge config file (resolves to
+                        /home/user/.config/answerback/config.json on this
+                        machine)
+  --here                Use caller REX_SESSION and REX_BLOCK
+  --session SESSION
+  --block BLOCK
+  --request-id REQUEST_ID
+=== answerback rex-receive --help
+usage: answerback rex-receive [-h] [--config CONFIG] [--wait WAIT] peer_id
+
+positional arguments:
+  peer_id
+
+options:
+  -h, --help       show this help message and exit
+  --config CONFIG  Bridge config file (resolves to
+                   /home/user/.config/answerback/config.json on this machine)
+  --wait WAIT
+=== answerback rex-ack --help
+usage: answerback rex-ack [-h] [--config CONFIG] peer_id task_id
+
+positional arguments:
+  peer_id
+  task_id
+
+options:
+  -h, --help       show this help message and exit
+  --config CONFIG  Bridge config file (resolves to
+                   /home/user/.config/answerback/config.json on this machine)
+=== answerback rex-complete --help
+usage: answerback rex-complete [-h] [--config CONFIG] (--result RESULT |
+                               --result-file RESULT_FILE)
+                               peer_id task_id
+
+positional arguments:
+  peer_id
+  task_id
+
+options:
+  -h, --help            show this help message and exit
+  --config CONFIG       Bridge config file (resolves to
+                        /home/user/.config/answerback/config.json on this
+                        machine)
+  --result RESULT
+  --result-file RESULT_FILE
+=== answerback rex-retire --help
+usage: answerback rex-retire [-h] [--config CONFIG] peer_id
+
+positional arguments:
+  peer_id
+
+options:
+  -h, --help       show this help message and exit
+  --config CONFIG  Bridge config file (resolves to
+                   /home/user/.config/answerback/config.json on this machine)
+=== answerback hc-configure --help
+usage: answerback hc-configure [-h] [--config CONFIG] [--binary BINARY]
+                               [--session SESSION]
+
+options:
+  -h, --help         show this help message and exit
+  --config CONFIG    Bridge config file (resolves to
+                     /home/user/.config/answerback/config.json on this
+                     machine)
+  --binary BINARY
+  --session SESSION  Optional herdr-core session, not an App space
+=== answerback read-hc --help
+usage: answerback read-hc [-h] [--config CONFIG] [--lines LINES] target
+
+positional arguments:
+  target
+
+options:
+  -h, --help       show this help message and exit
+  --config CONFIG  Bridge config file (resolves to
+                   /home/user/.config/answerback/config.json on this machine)
+  --lines LINES
+=== answerback kiro-register --help
+usage: answerback kiro-register [-h] [--config CONFIG] --cwd CWD
+                                [--binary BINARY]
+                                alias
+
+positional arguments:
+  alias
+
+options:
+  -h, --help       show this help message and exit
+  --config CONFIG  Bridge config file (resolves to
+                   /home/user/.config/answerback/config.json on this machine)
+  --cwd CWD
+  --binary BINARY
+=== answerback desktop-sessions --help
+usage: answerback desktop-sessions [-h] [--config CONFIG] [--cursor CURSOR]
+                                   [--limit LIMIT]
+                                   [query]
+
+positional arguments:
+  query
+
+options:
+  -h, --help       show this help message and exit
+  --config CONFIG  Bridge config file (resolves to
+                   /home/user/.config/answerback/config.json on this machine)
+  --cursor CURSOR
+  --limit LIMIT
+=== answerback kiro-sessions --help
+usage: answerback kiro-sessions [-h] [--config CONFIG] [--cwd CWD]
+                                [--cursor CURSOR]
+                                [query]
+
+positional arguments:
+  query
+
+options:
+  -h, --help       show this help message and exit
+  --config CONFIG  Bridge config file (resolves to
+                   /home/user/.config/answerback/config.json on this machine)
+  --cwd CWD
+  --cursor CURSOR
+=== answerback crew-configure --help
+usage: answerback crew-configure [-h] [--config CONFIG] [--binary BINARY]
+                                 [--port PORT]
+
+options:
+  -h, --help       show this help message and exit
+  --config CONFIG  Bridge config file (resolves to
+                   /home/user/.config/answerback/config.json on this machine)
+  --binary BINARY
+  --port PORT
+=== answerback crew-create --help
+usage: answerback crew-create [-h] [--config CONFIG] --project PROJECT
+                              [--request-id REQUEST_ID]
+                              title
+
+positional arguments:
+  title
+
+options:
+  -h, --help            show this help message and exit
+  --config CONFIG       Bridge config file (resolves to
+                        /home/user/.config/answerback/config.json on this
+                        machine)
+  --project PROJECT
+  --request-id REQUEST_ID
+=== answerback read-crew --help
+usage: answerback read-crew [-h] [--config CONFIG] target
+
+positional arguments:
+  target
+
+options:
+  -h, --help       show this help message and exit
+  --config CONFIG  Bridge config file (resolves to
+                   /home/user/.config/answerback/config.json on this machine)
+=== answerback send-desktop --help
+usage: answerback send-desktop [-h] [--config CONFIG] (--message MESSAGE |
+                               --message-file MESSAGE_FILE)
+                               --request-id REQUEST_ID
+                               target
+
+positional arguments:
+  target
+
+options:
+  -h, --help            show this help message and exit
+  --config CONFIG       Bridge config file (resolves to
+                        /home/user/.config/answerback/config.json on this
+                        machine)
+  --message MESSAGE
+  --message-file MESSAGE_FILE
+  --request-id REQUEST_ID
+=== answerback send-herdr --help
+usage: answerback send-herdr [-h] [--config CONFIG] (--message MESSAGE |
+                             --message-file MESSAGE_FILE)
+                             --request-id REQUEST_ID [--binding BINDING]
+                             target
+
+positional arguments:
+  target
+
+options:
+  -h, --help            show this help message and exit
+  --config CONFIG       Bridge config file (resolves to
+                        /home/user/.config/answerback/config.json on this
+                        machine)
+  --message MESSAGE
+  --message-file MESSAGE_FILE
+  --request-id REQUEST_ID
+  --binding BINDING     Identity binding returned by find/peer_search
+=== answerback read-desktop --help
+usage: answerback read-desktop [-h] [--config CONFIG] alias
+
+positional arguments:
+  alias
+
+options:
+  -h, --help       show this help message and exit
+  --config CONFIG  Bridge config file (resolves to
+                   /home/user/.config/answerback/config.json on this machine)
+=== answerback read-herdr --help
+usage: answerback read-herdr [-h] [--config CONFIG] [--lines LINES] target
+
+positional arguments:
+  target
+
+options:
+  -h, --help       show this help message and exit
+  --config CONFIG  Bridge config file (resolves to
+                   /home/user/.config/answerback/config.json on this machine)
+  --lines LINES

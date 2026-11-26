@@ -1,0 +1,173 @@
+{
+  "version": 1,
+  "project": "/work/answerback",
+  "project_space": "spcproject",
+  "harnesses": {
+    "claude": {
+      "provider": "hc",
+      "agent_kind": "claude",
+      "launch": [
+        "/work/answerback/tools/harness_launch.sh",
+        "claude",
+        "--dangerously-skip-permissions"
+      ],
+      "accepts_initial_prompt": false,
+      "model": "claude-model",
+      "max_workers": 2
+    },
+    "codex": {
+      "provider": "hc",
+      "agent_kind": "codex",
+      "launch": [
+        "/work/answerback/tools/harness_launch.sh",
+        "codex",
+        "--yolo"
+      ],
+      "accepts_initial_prompt": false,
+      "model": "codex-model",
+      "max_workers": 2
+    },
+    "grok": {
+      "provider": "hc",
+      "agent_kind": "grok",
+      "launch": [
+        "/work/answerback/tools/harness_launch.sh",
+        "grok",
+        "--yolo"
+      ],
+      "accepts_initial_prompt": false,
+      "model": "grok-model",
+      "max_workers": 2
+    },
+    "kiro": {
+      "provider": "hc",
+      "agent_kind": "kiro",
+      "launch": [
+        "kiro-cli",
+        "chat",
+        "-a",
+        "--v3",
+        "--agent=default"
+      ],
+      "launch_via": "direct",
+      "accepts_initial_prompt": false,
+      "model": "kiro-model",
+      "max_workers": 2
+    },
+    "crew": {
+      "provider": "crew",
+      "agent": "kirocrew-worker",
+      "created_by": "conductor",
+      "max_workers": 2
+    }
+  },
+  "classes": {
+    "design-impl": {
+      "primary": "claude",
+      "fallback": [
+        "codex"
+      ],
+      "match": [
+        "new module",
+        "protocol",
+        "schema",
+        "endpoint",
+        "across files"
+      ]
+    },
+    "port-fix": {
+      "primary": "codex",
+      "fallback": [
+        "claude"
+      ],
+      "match": [
+        "port",
+        "refactor",
+        "bugfix",
+        "one test per",
+        "exit code",
+        "timeout"
+      ]
+    },
+    "analysis": {
+      "primary": "grok",
+      "fallback": [
+        "claude"
+      ],
+      "match": [
+        "read-only",
+        "report",
+        "review the repo",
+        "research",
+        "compare",
+        "git log",
+        "cherry"
+      ]
+    },
+    "ledger-docs": {
+      "primary": "kiro",
+      "fallback": [
+        "crew"
+      ],
+      "match": [
+        "status/",
+        "hand-off",
+        "docs",
+        "changelog",
+        "STATUS.md"
+      ]
+    },
+    "review": {
+      "primary": "not-author",
+      "fallback": [
+        "council-litellm"
+      ],
+      "match": [
+        "review branch",
+        "second opinion",
+        "security read"
+      ]
+    },
+    "release-apply": {
+      "primary": "conductor",
+      "fallback": [],
+      "match": [
+        "merge",
+        "tag",
+        "install",
+        "apply-queue"
+      ]
+    },
+    "attended": {
+      "primary": "owner",
+      "fallback": [],
+      "match": [
+        "permission-answer",
+        "push",
+        "attended"
+      ]
+    }
+  },
+  "tie_breaks": [
+    "existing_idle_peer_same_project",
+    "not_author_of_touched_files",
+    "cheaper_seat"
+  ],
+  "lifecycle": {
+    "name_pattern": "{class}-{harness}-{yymmdd}-{n}",
+    "prime_text": null,
+    "prime_timeout_s": 120,
+    "request_id_pattern": "ab-{yyyymmdd}-{task}-{lane}-{address}",
+    "teardown_after": "handoff_merged_or_rejected",
+    "keep_idle_min": 20,
+    "warm_pool": {
+      "port-fix": 1
+    },
+    "max_total": 6,
+    "never_kill": [
+      "state=working",
+      "receipt in pending|submitted",
+      "owner-opened (always on, not read from this file: no registry row, unless bare, pattern-named and in the project)"
+    ]
+  }
+}

@@ -1,0 +1,577 @@
+{
+  "session.list": {
+    "invoke": {
+      "method": "session.list"
+    },
+    "input_schema": {
+      "type": "object",
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "sessions": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "session_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "session_id",
+              "label"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "sessions"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "session.list_blocks": {
+    "invoke": {
+      "method": "session.list_blocks"
+    },
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session_id"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "blocks": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "block_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "creator_name": {
+                "type": "string"
+              },
+              "flavor": {
+                "type": "string"
+              },
+              "host_id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "owner": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "placement": {
+                "type": "string"
+              },
+              "window_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "block_id",
+              "label",
+              "placement"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "blocks"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "session.describe_block": {
+    "invoke": {
+      "method": "session.describe_block"
+    },
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "block_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "session_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session_id",
+        "block_id"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "api": {
+          "type": "object",
+          "properties": {
+            "events": {
+              "type": "object",
+              "additionalProperties": true
+            },
+            "methods": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "actions": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "args": {},
+                        "category": {
+                          "type": "string"
+                        },
+                        "keywords": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "repeats": {
+                          "type": "boolean"
+                        },
+                        "title": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "title"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "input_schema": {},
+                  "output_schema": {}
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "block": {
+          "type": "object",
+          "properties": {
+            "block_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "creator_name": {
+              "type": "string"
+            },
+            "flavor": {
+              "type": "string"
+            },
+            "host_id": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "owner": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "placement": {
+              "type": "string"
+            },
+            "window_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "block_id",
+            "label",
+            "placement"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "block"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "com.superlogical.terminal.process": {
+    "invoke": {
+      "method": "com.superlogical.terminal.process"
+    },
+    "args_schema": {
+      "type": "object",
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "ancestors": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "argv0": {
+                "type": "string"
+              },
+              "cwd": {
+                "type": "string"
+              },
+              "invoked_path": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "pid": {
+                "type": "integer"
+              },
+              "script": {
+                "type": "string"
+              },
+              "user": {
+                "type": "string"
+              },
+              "user_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "pid",
+              "user_id",
+              "name"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "child": {
+          "type": [
+            "null",
+            "object"
+          ],
+          "properties": {
+            "argv0": {
+              "type": "string"
+            },
+            "cwd": {
+              "type": "string"
+            },
+            "invoked_path": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "pid": {
+              "type": "integer"
+            },
+            "script": {
+              "type": "string"
+            },
+            "user": {
+              "type": "string"
+            },
+            "user_id": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "pid",
+            "user_id",
+            "name"
+          ],
+          "additionalProperties": false
+        },
+        "foreground": {
+          "type": [
+            "null",
+            "object"
+          ],
+          "properties": {
+            "argv0": {
+              "type": "string"
+            },
+            "cwd": {
+              "type": "string"
+            },
+            "invoked_path": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "pid": {
+              "type": "integer"
+            },
+            "script": {
+              "type": "string"
+            },
+            "user": {
+              "type": "string"
+            },
+            "user_id": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "pid",
+            "user_id",
+            "name"
+          ],
+          "additionalProperties": false
+        },
+        "home": {
+          "type": "string"
+        },
+        "last_exit": {
+          "type": [
+            "null",
+            "object"
+          ],
+          "properties": {
+            "error": {
+              "type": "string"
+            },
+            "exit_code": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "exit_code"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "last_exit"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "com.superlogical.terminal.program_status": {
+    "invoke": {
+      "method": "com.superlogical.terminal.program_status"
+    },
+    "args_schema": {
+      "type": "object",
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "app": {
+                "type": "string"
+              },
+              "effective_app": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "msg": {
+                "type": "string"
+              },
+              "owner": {
+                "type": [
+                  "null",
+                  "object"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "pid": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "pid",
+                  "name"
+                ],
+                "additionalProperties": false
+              },
+              "progress": {
+                "type": [
+                  "null",
+                  "integer"
+                ],
+                "minimum": 0,
+                "maximum": 255
+              },
+              "state": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "state",
+              "updated_at"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "records"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "com.superlogical.terminal.format": {
+    "invoke": {
+      "method": "com.superlogical.terminal.format"
+    },
+    "args_schema": {
+      "type": "object",
+      "properties": {
+        "extra_charsets": {
+          "type": "boolean"
+        },
+        "extra_cursor": {
+          "type": "boolean"
+        },
+        "extra_hyperlink": {
+          "type": "boolean"
+        },
+        "extra_keyboard": {
+          "type": "boolean"
+        },
+        "extra_kitty_keyboard": {
+          "type": "boolean"
+        },
+        "extra_modes": {
+          "type": "boolean"
+        },
+        "extra_palette": {
+          "type": "boolean"
+        },
+        "extra_protection": {
+          "type": "boolean"
+        },
+        "extra_pwd": {
+          "type": "boolean"
+        },
+        "extra_scrolling_region": {
+          "type": "boolean"
+        },
+        "extra_style": {
+          "type": "boolean"
+        },
+        "extra_tabstops": {
+          "type": "boolean"
+        },
+        "format": {
+          "type": "string"
+        },
+        "max_bytes": {
+          "type": "integer"
+        },
+        "trim": {
+          "type": "boolean"
+        },
+        "unwrap": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "eof": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "content"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

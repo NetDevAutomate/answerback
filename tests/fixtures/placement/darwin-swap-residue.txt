@@ -1,0 +1,15 @@
+os=Darwin
+cores=16
+load= 11.20 17.62 38.31
+procs=1812
+largest_kb=3066544
+largest_name=agent
+harness_procs=28
+suites=0
+mem_total_kb=134217728
+pressure=1
+mem_level=84
+swap=total = 35840.00M  used = 34999.81M  free = 840.19M  (encrypted)
+page_bytes=16384
+compressor_pages=558327
+probe_end=1

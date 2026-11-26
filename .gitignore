@@ -1,0 +1,55 @@
+# Agentic Agent Files
+.claude/
+CLAUDE.md
+.kiro/
+.crush/
+.opencode/
+.cursor/
+.windsurf/
+.continue/
+.aider/
+.copilot/
+.speckit/
+.openspec/
+
+# IDE Files
+.vscode/
+.idea/
+*.code-workspace
+.zed/
+
+# Secrets: never commit these (repo_init)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+
+# Python bridge project
+.venv/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.pyc
+dist/
+build/
+*.egg-info/
+.coverage
+.coverage.*
+htmlcov/
+.local/
+
+# OS noise
+.DS_Store
+
+# aki-collab: local working state
+status/decisions/D-*.md
+# status/ledger.py lock sidecar (flock target; its content is only the holders' pid/since/mode lines)
+status/tasks.json.lock
+# generated knowledge graph (graphify), 17 MB; never committed
+graphify-out/
+.act-artifacts/

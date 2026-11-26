@@ -1,0 +1,155 @@
+{
+  "schema": "answerback.herdr-app-assets/1",
+  "captured": "2026-11-23",
+  "source": {
+    "mods/answerback-fleet": "The owner's ~/.config/herdr-app/mods/answerback-fleet as it stood on 2026-11-23 (files of 2026-11-20 and 2026-11-21: the fleet column, version 2, lane proto-col, fix rounds proto-col-fix to col-lead3f, marker ABPANEL-20261120). main.js and mod.json are byte-identical; fleet.js has the T-181 footer change and fixtures.js two small changes (see their rows); previous_digests holds the digests of the earlier copies, which the installer updates. The two helper files the App writes beside a mod (gpui-kit.d.ts, jsconfig.json) are left out: they are the App's, and it writes them when it first sees the folder.",
+    "themes": "The owner's ~/.config/herdr-app/themes of 2026-11-10 and 2026-11-11, byte-identical. Only the owner's own files are here; the two the Herdr App ships (atom-one-dark, win98) are dependencies below."
+  },
+  "files": [
+    {
+      "path": "mods/answerback-fleet/fixtures.js",
+      "digest": "sha256:1f390810cbdc04584321922489a8253b063b50f080b4c774d50fc51e0ae860fa",
+      "bytes": 21494,
+      "kind": "mod",
+      "licence": "Apache-2.0 (this project)",
+      "provenance": "The owner's copy with two changes: health.service.version on the sample document (T-181), and one gitleaks:allow comment on a sample request key that gitleaks' generic-api-key rule reads as a key. Names in it were written by programs on five machines; display text only.",
+      "written_by": "answerback",
+      "previous_digests": [
+        "sha256:a275baab8906ddb9c5811a87430d13f6a5431b1f6713755f3926abfce0ead1f3",
+        "sha256:ba93933240848c5fa3985335ec98f769d80983603d02218249dfafc3a9b0b058",
+        "sha256:1ad54964953a387ff563bac8a3afbb277abe5f3978fcd7262b00b1deb8590ac0"
+      ],
+      "note": "Step 11 of the modular split (T-202) renamed the sample failed-client rows from the provider that left the kernel package to a Kiro sample; the installer updates the earlier copy."
+    },
+    {
+      "path": "mods/answerback-fleet/fleet.js",
+      "digest": "sha256:7e107ce202a65d64925754134b5db2175be220bcadca39888351728b5ed4a802",
+      "bytes": 138275,
+      "kind": "mod",
+      "licence": "Apache-2.0 (this project)",
+      "provenance": "The owner's copy with the T-181 footer change: 'bridge X' from health.service.version, 'writer Y' only when the writer's version differs, 'data live' for a reading under 5 s (footer, footerVersion, VERSION_MAX).",
+      "written_by": "answerback",
+      "previous_digests": [
+        "sha256:1d0fa5e80e3a43ebb21bbfebb134960747d780763a4c9b0ff9e928c232eb5a76",
+        "sha256:627aa1bb3c0cb54c76b6c2a1eaf377bfa1afa5e22234278db477b995965639cf"
+      ],
+      "note": "Step 11 of the modular split (T-202) renamed the sample failed-client rows from the provider that left the kernel package to a Kiro sample; the installer updates the earlier copy."
+    },
+    {
+      "path": "mods/answerback-fleet/main.js",
+      "digest": "sha256:02d246d2887b085108967539129c72ce587e99a07136ed3aa1392e459b3725e6",
+      "bytes": 59962,
+      "kind": "mod",
+      "licence": "Apache-2.0 (this project)",
+      "provenance": "The owner's copy, byte-identical.",
+      "written_by": "answerback"
+    },
+    {
+      "path": "mods/answerback-fleet/mod.json",
+      "digest": "sha256:f54990c88741e429343805ab6f805aaed00991a01958061ba66171e5f132a606",
+      "bytes": 34,
+      "kind": "mod",
+      "licence": "Apache-2.0 (this project)",
+      "provenance": "The owner's copy, byte-identical: place right, 320 wide.",
+      "written_by": "answerback"
+    },
+    {
+      "path": "themes/catppuccin-frappe.json",
+      "digest": "sha256:c96d49ea3b8d599903476b71049056e748291209039bce521f8f7bda0e999de2",
+      "bytes": 746,
+      "kind": "theme",
+      "licence": "The file: the owner's (Apache-2.0 with this project). Palette: Catppuccin, MIT (github.com/catppuccin/catppuccin).",
+      "provenance": "The owner's file (dated 2026-11-10) built from the Catppuccin Frappé palette, with the owner's panel colour overrides.",
+      "written_by": "answerback"
+    },
+    {
+      "path": "themes/catppuccin-latte.json",
+      "digest": "sha256:af529e510df8f2b070f98a9e63f86fcdfc2fbeffd50ae58ed4db9f53a163e603",
+      "bytes": 746,
+      "kind": "theme",
+      "licence": "The file: the owner's (Apache-2.0 with this project). Palette: Catppuccin, MIT (github.com/catppuccin/catppuccin).",
+      "provenance": "The owner's file (dated 2026-11-10) built from the Catppuccin Latte palette, with the owner's panel colour overrides.",
+      "written_by": "answerback"
+    },
+    {
+      "path": "themes/catppuccin-macchiato.json",
+      "digest": "sha256:4deabaa9412976b13a75285fedc12a2be75a0b1c77b96bdf61705ddad024a479",
+      "bytes": 746,
+      "kind": "theme",
+      "licence": "The file: the owner's (Apache-2.0 with this project). Palette: Catppuccin, MIT (github.com/catppuccin/catppuccin).",
+      "provenance": "The owner's file (dated 2026-11-10) built from the Catppuccin Macchiato palette, with the owner's panel colour overrides.",
+      "written_by": "answerback"
+    },
+    {
+      "path": "themes/catppuccin-mocha.json",
+      "digest": "sha256:f821e8f461c2c5f6df3b6437d098c5f1a9503b36471af1323330c8106c6fe519",
+      "bytes": 746,
+      "kind": "theme",
+      "licence": "The file: the owner's (Apache-2.0 with this project). Palette: Catppuccin, MIT (github.com/catppuccin/catppuccin).",
+      "provenance": "The owner's file (dated 2026-11-10) built from the Catppuccin Mocha palette, with the owner's panel colour overrides.",
+      "written_by": "answerback"
+    },
+    {
+      "path": "themes/rex-macchiato.json",
+      "digest": "sha256:a51432b5e8904ff1baa952df3dda704b3c75f9f283960fbaee1a4620fc0851de",
+      "bytes": 802,
+      "kind": "theme",
+      "licence": "The file: the owner's (Apache-2.0 with this project). Palette: a variant of Catppuccin Macchiato, MIT.",
+      "provenance": "The owner's own theme (dated 2026-11-10): Catppuccin Macchiato colours on the owner's background; the dark half of the owner's catppuccin layout.",
+      "written_by": "answerback"
+    },
+    {
+      "path": "themes/zed-tokyo-night.json",
+      "digest": "sha256:cba1b28fcf17fac933f7b1ba8559bbf99a32c4121cb3bbabcbc5e61525360478",
+      "bytes": 870,
+      "kind": "theme",
+      "licence": "The file: the owner's (Apache-2.0 with this project). Palette: Tokyo Night (enkia, MIT).",
+      "provenance": "The owner's file (dated 2026-11-10); its name says it follows Zed's Tokyo Night theme. Colour values, with the owner's panel colour overrides.",
+      "written_by": "answerback"
+    }
+  ],
+  "superseded": {
+    "path": "mods/answerback",
+    "files": {
+      "bridge.js": "sha256:263f47ec2ddced3d97463efbb6896f87c6f849dffd80139cdb7a230af5de3549",
+      "bridge.test.mjs": "sha256:c7c17495a8e6948c27b0edcf633b56f503ca9aaa7d16046340a4248ae521ab72",
+      "logic.js": "sha256:36db4cc789d57e1b4e18b32d308c2fda8702e97ec4a15eb2f4bab7d5f96c6d09",
+      "logic.test.mjs": "sha256:f8d754a747cd127505b78014eb105756cc4328b3bd1eaf6a598792f76f568517",
+      "main.js": "sha256:e34adce638324346d455396d8b7e59de53e2ea1112d60fb6680a5f6001d5dc9f",
+      "mod.json": "sha256:f54990c88741e429343805ab6f805aaed00991a01958061ba66171e5f132a606"
+    },
+    "note": "The older read-only status panel (integrations/herdr-app/answerback in this repository: service state, receipt counts, newest receipts, dock badge, read by running the answerback CLI). The fleet column shows all of that and more from the bridge's fleet document, so the install removes an unchanged copy of the older panel, with a backup and a line in the output, and leaves an edited one alone."
+  },
+  "dependencies": [
+    {
+      "path": "themes/atom-one-dark.json",
+      "kind": "theme",
+      "provenance": "Shipped by the Herdr App (Apache-2.0, github.com/herdrdev/herdr-app), which upgrades the unedited file on start. Not vendored: the App's own.",
+      "needed_by": "The owner's layouts may name it; the Answerback column does not need it."
+    },
+    {
+      "path": "themes/win98.json",
+      "kind": "theme",
+      "provenance": "Shipped by the Herdr App with its win98 layout (Apache-2.0). Not vendored: the App's own.",
+      "needed_by": "The App's win98 layout only."
+    },
+    {
+      "path": "mods/better-sidebar-fleet",
+      "kind": "mod",
+      "provenance": "A clone (mod.json: cloned_from better-sidebar 0.1.16, version 3.2.0) of the mod Better Sidebar, with two added views that read the fleet (views/fleet.js, views/titles.js). Better Sidebar is not shipped by the Herdr App (it is absent from installed.json) and its files carry no licence line; where it came from is not recorded. Not vendored until its origin and licence are known (decision D-20261123-03).",
+      "needed_by": "The owner's catppuccin layout places it twice (spaces, agents) on the left. The Answerback column on the right does not need it."
+    },
+    {
+      "path": "mods/catppuccin-{changes,chrome,files,status,tabs}",
+      "kind": "mod",
+      "provenance": "The owner's clones of the Herdr App's shipped mods changes, workspace-chrome, files, workspace-status and tabs at 0.1.12 (mod.json cloned_from; Apache-2.0) with the owner's look edits. Not vendored: derived from the App's shipped mods, which this project does not include.",
+      "needed_by": "The owner's catppuccin layout."
+    },
+    {
+      "path": "mods/square-dracula-{agents,changes,files,machine-add,menu,new-menu,pane,picker,spaces,tabs,workspace-chrome,worktree}",
+      "kind": "mod",
+      "provenance": "The owner's clones of the Herdr App's shipped mods at 0.1.7 (mod.json cloned_from; Apache-2.0) with the owner's look edits. Not vendored, as above.",
+      "needed_by": "The owner's square-dracula layout."
+    }
+  ]
+}
