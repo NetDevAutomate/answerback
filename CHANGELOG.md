@@ -12,15 +12,17 @@ to, stay in the maintainers' private archive.
   send --subject <text>` and the `subject` argument of the MCP `peer_submit` store 1 to 256
   printable characters (a commit SHA, an artifact digest, a release tag, a document ID) as the
   receipt's top-level `subject`, shown by `task`, `tasks`, `task_get` and `task_list`.
-  `answerback tasks --subject <text>` and `task_list` with `subject` return the receipts with
-  exactly that subject from the whole store, with a `subject_matches` count. The same request ID
+  `answerback tasks --subject <text>` and `task_list` with `subject` return the newest 100
+  receipts of the whole store with exactly that subject, with a `subject_matches` count of all
+  of them. The same request ID
   with a different subject, or with one where the first had none, is refused as different
   work. The bridge never checks a subject, and adapters need no change: the router hands the
   subject to the store's reservation. The task store gains a `task_subjects` table, added on
   first open, with a trigger that refuses changing a stored subject; the `tasks` table itself is
   unchanged and older receipts read `null`. Maintenance keeps a subject when it prunes a
-  receipt's message and result. A bridge downgraded onto a migrated store still works but
-  shows and compares no subject. See [Receipts](docs/RECEIPTS.md#name-what-a-hand-off-is-about).
+  receipt's message and result. A bridge downgraded onto a migrated store still sends and
+  reads receipts but shows and compares no subject, and its maintenance treats the store as an
+  unsupported schema and prunes nothing in it. See [Receipts](docs/RECEIPTS.md#name-what-a-hand-off-is-about).
 
 ## 0.16.2 - 2026-11-26
 

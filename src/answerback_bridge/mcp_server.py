@@ -286,7 +286,8 @@ def create_server(
     ) -> dict[str, Any]:
         """Search the latest 100 receipts by peer/project keywords; bodies are omitted.
 
-        With `subject`, search every receipt whose subject is exactly that text instead.
+        With `subject`, search instead the newest 100 receipts of the whole store whose subject
+        is exactly that text; `subject_matches` counts all receipts with it.
         """
         return await bridge.call("task_list", {"query": query, "limit": limit, "subject": subject})
 

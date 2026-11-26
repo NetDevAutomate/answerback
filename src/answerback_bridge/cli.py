@@ -273,7 +273,11 @@ def parser(
     tasks.add_argument("query", nargs="?", default="")
     tasks.add_argument("--limit", type=int, default=30)
     tasks.add_argument(
-        "--subject", help="Only receipts whose subject is exactly this text, from all receipts"
+        "--subject",
+        help=(
+            "Only receipts whose subject is exactly this text: the newest 100 of them in the "
+            "whole store; subject_matches counts all"
+        ),
     )
     for name in ("permissions", "permission-answer", "cancel"):
         control = commands.add_parser(name)

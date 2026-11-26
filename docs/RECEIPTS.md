@@ -120,10 +120,10 @@ and no leading or trailing space. It is shown as the receipt's top-level `subjec
 from a bridge older than this field. Once stored it never changes.
 
 `tasks --subject <text>` and `task_list` with `subject` return the receipts whose subject is
-exactly that text, newest first, from every receipt in the store rather than only the latest
-100; a keyword query still narrows them. The result's `subject_matches` counts every receipt
-with that subject before the keyword query and the limit, so you can tell when some were left
-out. The match is exact and case-sensitive: a short SHA does not find a full one, so expand it
+exactly that text, newest first. They look through the whole store, not only the latest 100
+receipts, and take the newest 100 receipts with that subject; a keyword query then narrows
+those, and `--limit` cuts the list. The result's `subject_matches` counts every receipt with
+that subject in the store, so when it is larger than 100, older ones were not searched. The match is exact and case-sensitive: a short SHA does not find a full one, so expand it
 first with `git rev-parse`.
 
 The bridge never checks a subject. It is not added to the message, so the recipient does not
