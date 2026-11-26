@@ -101,9 +101,19 @@ class InventingWorkers(ReservingWorkers):
         return await super().submit(*args, subject=subject or "invented", **kwargs)
 
 
-def subject_declaration(workers_type: type[Workers]) -> ProviderConformance:
+def subject_declaration(
+    workers_type: type[Workers], *, stale_return: str | None = None
+) -> ProviderConformance:
+    """`workers_type` switches what is stored. `stale_return` ("with" or "without") makes the
+    probe store the right subject for that submission but return a receipt snapshot holding
+    the wrong one."""
+
     async def probe(store: TaskStore, submission: Submission) -> TaskReceipt:
-        return await kiro_subject_probe(store, submission, workers_type)
+        receipt = await kiro_subject_probe(store, submission, workers_type)
+        if stale_return != ("with" if submission.subject is not None else "without"):
+            return receipt
+        wrong = None if submission.subject is not None else "stale"
+        return TaskReceipt.from_record({**receipt.as_record(), "subject": wrong})
 
     return ProviderConformance(
         factory=kiro_plugin,
@@ -121,6 +131,16 @@ def test_the_subject_case_refuses_a_provider_that_does_not_carry_the_subject(
 ) -> None:
     with pytest.raises(AssertionError, match=f"for a submission {label} a subject"):
         conformance._subject(subject_declaration(workers_type), tmp_path)
+
+
+@pytest.mark.parametrize("label", ["with", "without"])
+def test_the_subject_case_refuses_a_returned_receipt_with_the_wrong_subject(
+    tmp_path: Path, label: str
+) -> None:
+    """T-277 review 3: the right stored row does not excuse a stale returned receipt."""
+    declaration = subject_declaration(ReservingWorkers, stale_return=label)
+    with pytest.raises(AssertionError, match=f"returned a receipt with subject .* {label} a"):
+        conformance._subject(declaration, tmp_path)
 
 
 async def test_the_subject_case_runs_from_a_running_loop(tmp_path: Path) -> None:

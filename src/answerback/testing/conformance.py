@@ -345,6 +345,12 @@ def _subject(declaration: ProviderConformance, directory: Path) -> None:
             f"provider {registration} stored subject {stored['subject']!r} for a submission "
             f"{label} a subject; pass `subject=submission.subject` to `TaskStore.reserve`"
         )
+        # The receipt the provider hands back must hold it too, not only the stored row.
+        returned = receipt.as_record().get("subject")
+        assert returned == subject, (
+            f"provider {registration} returned a receipt with subject {returned!r} for a "
+            f"submission {label} a subject; return the receipt `TaskStore.reserve` gave"
+        )
 
 
 def _string_constants(path: Path) -> list[str]:
