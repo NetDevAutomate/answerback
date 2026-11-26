@@ -217,7 +217,9 @@ def test_an_old_store_gains_the_subject_table_and_keeps_its_task_columns(tmp_pat
         db.execute("DROP TRIGGER task_subjects_immutable")
         db.execute("DROP TRIGGER task_subjects_deleted")
         db.execute("DROP TRIGGER task_subjects_kept")
+        db.execute("DROP TRIGGER task_subjects_created")
         db.execute("DROP TABLE task_subjects")
+        db.execute("DROP TABLE task_subject_pending")
         # A positional insert of the eleven task columns, as older code wrote them.
         db.execute(
             "INSERT INTO tasks VALUES ('old','old-1','t','m','completed',1,1,'{}',NULL,NULL,NULL)"
@@ -232,7 +234,8 @@ def test_an_old_store_gains_the_subject_table_and_keeps_its_task_columns(tmp_pat
     db.close()
     assert columns == before and "subject" not in columns and version == 0
     assert {"task_subjects", "task_subjects_subject", "task_subjects_immutable"} <= names
-    assert {"task_subjects_deleted", "task_subjects_kept", "task_subjects_reserved"} <= names
+    assert {"task_subjects_deleted", "task_subjects_kept", "task_subjects_staged"} <= names
+    assert {"task_subject_pending", "task_subject_pending_new", "task_subjects_created"} <= names
     TaskStore(path)  # a second open migrates nothing and does not fail
 
 
@@ -285,6 +288,127 @@ def test_a_subjectless_receipt_cannot_acquire_a_subject_later(tmp_path: Path) ->
     assert store.get(labelled["id"])["subject"] == SHA
 
 
+def test_a_subject_row_id_colliding_with_an_older_task_cannot_label_it(tmp_path: Path) -> None:
+    """T-277 review 4: a subject-bearing reservation once left `last_insert_rowid()` equal
+    to an older subjectless task's rowid, so a later transaction on the same connection
+    could give that task a subject. The marker rule has no rowid to collide with."""
+    store = TaskStore(tmp_path / "tasks.sqlite")
+    plain, _ = store.reserve("a", "Review", "plain", {"kind": "fixture"})
+    db = sqlite3.connect(store.path)
+    try:
+        db.row_factory = sqlite3.Row
+        db.execute("BEGIN IMMEDIATE")
+        labelled, _ = store.reserve_in_transaction(
+            db, "b", "Review", "labelled", {"kind": "fixture"}, subject=SHA
+        )
+        db.commit()
+        assert labelled["subject"] == SHA
+        db.execute("BEGIN IMMEDIATE")
+        with pytest.raises(sqlite3.IntegrityError, match="written only with its task"):
+            db.execute(
+                "INSERT INTO task_subjects (task_id, subject) VALUES (?, 'late-next-tx')",
+                (plain["id"],),
+            )
+        db.rollback()
+    finally:
+        db.close()
+    assert store.get(plain["id"])["subject"] is None
+    assert store.get(labelled["id"])["subject"] == SHA
+    assert store.by_subject("late-next-tx") == ([], 0)
+
+
+def test_a_marker_for_an_existing_task_is_refused(tmp_path: Path) -> None:
+    store = TaskStore(tmp_path / "tasks.sqlite")
+    plain, _ = store.reserve("a", "Review", "plain", {"kind": "fixture"})
+    with pytest.raises(sqlite3.IntegrityError, match="written only with its task"):
+        with store.connection() as db:
+            db.execute(
+                "INSERT INTO task_subject_pending (task_id, subject) VALUES (?, 'late')",
+                (plain["id"],),
+            )
+    # Nor can a marker for an unused id be renamed onto the task.
+    with pytest.raises(sqlite3.IntegrityError, match="written only with its task"):
+        with store.connection() as db:
+            db.execute("INSERT INTO task_subject_pending (task_id, subject) VALUES ('x', 'late')")
+            db.execute(
+                "UPDATE task_subject_pending SET task_id=? WHERE task_id='x'", (plain["id"],)
+            )
+    # A marker with its subject row still needs the task: inserting the row before the
+    # task exists is refused.
+    with pytest.raises(sqlite3.IntegrityError, match="written only with its task"):
+        with store.connection() as db:
+            db.execute("INSERT INTO task_subject_pending (task_id, subject) VALUES ('y', 's')")
+            db.execute("INSERT INTO task_subjects (task_id, subject) VALUES ('y', 's')")
+    assert store.get(plain["id"])["subject"] is None
+
+
+def test_the_reservation_consumes_its_marker(tmp_path: Path) -> None:
+    store = TaskStore(tmp_path / "tasks.sqlite")
+    labelled, _ = store.reserve("a", "Review", "labelled", {"kind": "fixture"}, subject=SHA)
+    plain, _ = store.reserve("b", "Review", "plain", {"kind": "fixture"})
+    with sqlite3.connect(store.path) as db:
+        pending = db.execute("SELECT count(*) FROM task_subject_pending").fetchone()[0]
+        rows = db.execute("SELECT task_id, subject FROM task_subjects").fetchall()
+        kinds = {
+            row[0]: row[1]
+            for row in db.execute(
+                "SELECT name, sql FROM sqlite_master WHERE name LIKE 'task_subject%' "
+                "AND type='table'"
+            )
+        }
+    db.close()
+    assert pending == 0 and rows == [(labelled["id"], SHA)]
+    assert all("WITHOUT ROWID" in sql for sql in kinds.values()) and len(kinds) == 2
+    assert store.get(plain["id"])["subject"] is None
+    assert store.by_subject(SHA)[1] == 1
+    # Code from before T-277 inserts tasks positionally and knows no marker: its task
+    # still inserts, without a subject.
+    with sqlite3.connect(store.path) as db:
+        db.execute(
+            "INSERT INTO tasks VALUES ('old','old-1','t','m','completed',1,1,'{}',NULL,NULL,NULL)"
+        )
+    db.close()
+    assert store.get("old")["subject"] is None
+
+
+def test_a_round_three_store_moves_to_the_marker_rule(tmp_path: Path) -> None:
+    """A store made by round 3 has a rowid `task_subjects` and `task_subjects_reserved`;
+    opening it drops that trigger, adds the marker rule and keeps its subject rows."""
+    path = tmp_path / "tasks.sqlite"
+    store = TaskStore(path)
+    labelled, _ = store.reserve("a", "Review", "labelled", {"kind": "fixture"}, subject=SHA)
+    with sqlite3.connect(path) as db:
+        for name in ("task_subjects_staged", "task_subjects_created"):
+            db.execute(f"DROP TRIGGER {name}")
+        db.execute("DROP TABLE task_subject_pending")
+        db.execute("ALTER TABLE task_subjects RENAME TO kept")
+        db.execute("CREATE TABLE task_subjects (task_id TEXT PRIMARY KEY, subject TEXT NOT NULL)")
+        db.execute("INSERT INTO task_subjects SELECT * FROM kept")
+        db.execute("DROP TABLE kept")
+        db.execute(
+            "CREATE TRIGGER task_subjects_reserved BEFORE INSERT ON task_subjects "
+            "WHEN NOT EXISTS (SELECT 1 FROM tasks WHERE id=NEW.task_id "
+            "AND rowid=last_insert_rowid()) "
+            "BEGIN SELECT RAISE(ABORT, 'Task subject is written only with its task'); END"
+        )
+    db.close()
+    store = TaskStore(path)
+    with sqlite3.connect(path) as db:
+        names = {row[0] for row in db.execute("SELECT name FROM sqlite_master")}
+    db.close()
+    assert "task_subjects_reserved" not in names
+    assert {"task_subjects_staged", "task_subjects_created", "task_subject_pending"} <= names
+    assert store.get(labelled["id"])["subject"] == SHA
+    plain, _ = store.reserve("b", "Review", "plain", {"kind": "fixture"})
+    second, _ = store.reserve("c", "Review", "second", {"kind": "fixture"}, subject="v2")
+    assert store.get(second["id"])["subject"] == "v2"
+    with pytest.raises(sqlite3.IntegrityError, match="written only with its task"):
+        with store.connection() as db:
+            db.execute(
+                "INSERT INTO task_subjects (task_id, subject) VALUES (?, 'late')", (plain["id"],)
+            )
+
+
 def test_an_orphan_subject_is_refused_and_never_counted(tmp_path: Path) -> None:
     store = TaskStore(tmp_path / "tasks.sqlite")
     with pytest.raises(sqlite3.IntegrityError, match="written only with its task"):
@@ -293,7 +417,7 @@ def test_an_orphan_subject_is_refused_and_never_counted(tmp_path: Path) -> None:
     # A row left by a store from before the trigger: counted only with its task.
     task, _ = store.reserve("t", "Review", "r1", {"kind": "fixture"}, subject="o")
     with store.connection() as db:
-        db.execute("DROP TRIGGER task_subjects_reserved")
+        db.execute("DROP TRIGGER task_subjects_staged")
         db.execute("INSERT INTO task_subjects (task_id, subject) VALUES ('orphan', 'o')")
     rows, total = store.by_subject("o")
     assert [row["id"] for row in rows] == [task["id"]] and total == 1

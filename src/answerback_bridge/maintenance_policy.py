@@ -34,6 +34,8 @@ KNOWN = {
         "sqlite_sequence",
         # Receipt subjects (T-277): short sender text, kept with the receipt, never pruned.
         "task_subjects",
+        # A subject staged by a reservation for the task it is about to insert (T-277).
+        "task_subject_pending",
     },
     "bus": {
         "retention_history",
@@ -56,6 +58,7 @@ COLUMNS = {
     "native_sessions": {"provider", "session_id", "alias", "cwd", "profile"},
     "hc_machine_pins": {"machine", "id", "pinned"},
     "task_subjects": {"task_id", "subject"},
+    "task_subject_pending": {"task_id", "subject"},
     "tasks": {
         "id",
         "request_key",

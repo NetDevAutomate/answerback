@@ -84,24 +84,53 @@ def migrate_subjects(db: sqlite3.Connection) -> None:
     """The subject of each receipt that has one (T-277), in its own table.
 
     A table rather than a `tasks` column, so the `tasks` columns that positional inserts and
-    maintenance's schema check rely on are unchanged. A row is written by the reservation
-    that creates the receipt, straight after its task's INSERT, never added later, updated
-    or deleted on its own, and removed with its task.
+    maintenance's schema check rely on are unchanged. A row is created only by its task's
+    INSERT, from a marker staged before that INSERT, never added later, updated or deleted
+    on its own, and removed with its task.
     """
+    # `WITHOUT ROWID`: no rule below reads a rowid. A store from before this round keeps its
+    # rowid table; the marker triggers do not depend on which kind it is.
     db.execute(
-        "CREATE TABLE IF NOT EXISTS task_subjects (task_id TEXT PRIMARY KEY, subject TEXT NOT NULL)"
+        "CREATE TABLE IF NOT EXISTS task_subjects "
+        "(task_id TEXT PRIMARY KEY, subject TEXT NOT NULL) WITHOUT ROWID"
     )
     db.execute("CREATE INDEX IF NOT EXISTS task_subjects_subject ON task_subjects(subject)")
-    # A subject is written only with its task's INSERT, never acquired later and never for no
-    # task: the row must name the task whose INSERT is this connection's last successful one
-    # (`last_insert_rowid()`; inside this BEFORE trigger it still names the `tasks` row, as
-    # the AFTER INSERT retention trigger's own inserts revert when that trigger ends).
-    # SQLite has no transaction identity; this is the narrowest equivalent: a fresh
-    # connection, or one that inserted anything since, cannot add a subject to a stored task.
+    # The reservation stages the subject here before it inserts the task; the task's INSERT
+    # consumes it. A marker can be staged only while no task has that id, so no marker, and
+    # therefore no subject, can ever be made for a task that already exists.
     db.execute(
-        "CREATE TRIGGER IF NOT EXISTS task_subjects_reserved BEFORE INSERT ON task_subjects "
-        "WHEN NOT EXISTS (SELECT 1 FROM tasks WHERE id=NEW.task_id AND rowid=last_insert_rowid()) "
+        "CREATE TABLE IF NOT EXISTS task_subject_pending "
+        "(task_id TEXT PRIMARY KEY, subject TEXT NOT NULL) WITHOUT ROWID"
+    )
+    db.execute(
+        "CREATE TRIGGER IF NOT EXISTS task_subject_pending_new "
+        "BEFORE INSERT ON task_subject_pending "
+        "WHEN EXISTS (SELECT 1 FROM tasks WHERE id=NEW.task_id) "
         "BEGIN SELECT RAISE(ABORT, 'Task subject is written only with its task'); END"
+    )
+    db.execute(
+        "CREATE TRIGGER IF NOT EXISTS task_subject_pending_fixed "
+        "BEFORE UPDATE ON task_subject_pending "
+        "BEGIN SELECT RAISE(ABORT, 'Task subject is written only with its task'); END"
+    )
+    # Round 3's rule compared the task's rowid with `last_insert_rowid()`, which the subject
+    # INSERT itself resets, so a later transaction on that connection could pass it (review 4).
+    db.execute("DROP TRIGGER IF EXISTS task_subjects_reserved")
+    # A subject row needs both its task and its marker. A marker exists for a stored task
+    # only between that task's INSERT and the end of `task_subjects_created`, so this trigger
+    # admits only the row `task_subjects_created` writes.
+    db.execute(
+        "CREATE TRIGGER IF NOT EXISTS task_subjects_staged BEFORE INSERT ON task_subjects "
+        "WHEN NOT EXISTS (SELECT 1 FROM tasks WHERE id=NEW.task_id) "
+        "OR NOT EXISTS (SELECT 1 FROM task_subject_pending "
+        "WHERE task_id=NEW.task_id AND subject=NEW.subject) "
+        "BEGIN SELECT RAISE(ABORT, 'Task subject is written only with its task'); END"
+    )
+    db.execute(
+        "CREATE TRIGGER IF NOT EXISTS task_subjects_created AFTER INSERT ON tasks "
+        "BEGIN INSERT INTO task_subjects (task_id, subject) "
+        "SELECT task_id, subject FROM task_subject_pending WHERE task_id=NEW.id; "
+        "DELETE FROM task_subject_pending WHERE task_id=NEW.id; END"
     )
     db.execute(
         "CREATE TRIGGER IF NOT EXISTS task_subjects_immutable BEFORE UPDATE ON task_subjects "

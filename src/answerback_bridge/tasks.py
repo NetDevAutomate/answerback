@@ -297,6 +297,15 @@ class TaskStore:
         stored = metadata or {}
         if isinstance(stored, dict):
             stored = receipt_version.stamp_created(stored)
+        # The subject is staged before the task's INSERT, which consumes it into
+        # `task_subjects` (the `task_subjects_created` trigger). A marker left by anything
+        # else for this id is cleared first, so the receipt gets exactly this subject or none.
+        db.execute("DELETE FROM task_subject_pending WHERE task_id=?", (task_id,))
+        if subject is not None:
+            db.execute(
+                "INSERT INTO task_subject_pending (task_id, subject) VALUES (?, ?)",
+                (task_id, subject),
+            )
         db.execute(
             "INSERT INTO tasks (id,request_key,target,message,status,created,updated,"
             "metadata,result,detail,turn_id) "
@@ -312,12 +321,6 @@ class TaskStore:
                 json.dumps(stored),
             ),
         )
-        # Straight after the task's INSERT: the `task_subjects_reserved` trigger refuses a
-        # subject for any task but the one this connection inserted last.
-        if subject is not None:
-            db.execute(
-                "INSERT INTO task_subjects (task_id, subject) VALUES (?, ?)", (task_id, subject)
-            )
         row = db.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
         assert row is not None
         return self.decode(row, db), True
