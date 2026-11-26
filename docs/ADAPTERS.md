@@ -230,8 +230,9 @@ a block back only when the provider is selected or the block differs from its de
 Until 0.17 the loader also reads the flat pre-split keys (`<provider>_<field>`, or the block's
 `flat_aliases`), and `Config` exposes the same flat names as read-write attributes so existing code
 keeps working while it is moved to the blocks; a flat key beside its nested twin is ignored with one
-warning. The flat keys of a provider that left the kernel (`config.RETIRED_FLAT_KEYS`) are read the
-same way so an old file still loads when its plugin is absent. A `providers.<name>` block or
+warning. A flat key whose prefix is a provider the file's own `provider_selection` names and no
+loaded plugin claims is kept as that provider's disabled block, so an old file still loads when its
+plugin is absent; any other unclaimed flat key is refused. A `providers.<name>` block or
 `provider_selection` entry no loaded plugin claims is kept in `Config.unknown_providers`, written
 back verbatim, excluded from `registered_providers()`, listed by `disabled_providers()` and reported
 by `doctor` as `disabled` with the reason; the loader logs one warning naming the providers. The
