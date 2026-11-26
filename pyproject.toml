@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "answerback"
-version = "0.16.0+internal"
+version = "0.16.1"
 description = "A local agent collaboration service with optional durable NATS delivery"
 readme = "README.md"
 license = "Apache-2.0"
@@ -58,16 +58,6 @@ dev = [
     "ruff>=0.14,<1",
     "ty==0.0.84",
 ]
-# The internal composition: the internal provider plugin, installed editable from this
-# workspace (`uv sync --group internal`; `just check-internal`). The default sync is the
-# public kernel.
-internal = ["answerback-aki"]
-
-[tool.uv.workspace]
-members = ["packages/*"]
-
-[tool.uv.sources]
-answerback-aki = { workspace = true }
 
 # The source distribution is an allowlist: maintainer tooling (pre-commit and secret-scanner
 # configuration, local notes) never ships.
