@@ -754,9 +754,9 @@ async def test_large_history_with_many_credentials_keeps_status_answering(
     redacting_threads: list[int] = []
     redact_payload = Crew._redact_payload
 
-    def observed(payload: bytes, forms: tuple[str, ...]) -> Any:
+    def observed(payload: bytes, credentials: tuple[str, ...]) -> Any:
         redacting_threads.append(threading.get_ident())
-        return redact_payload(payload, forms)
+        return redact_payload(payload, credentials)
 
     monkeypatch.setattr(Crew, "_redact_payload", staticmethod(observed))
     with tempfile.TemporaryDirectory(prefix="hb-", dir="/tmp") as directory:
@@ -783,13 +783,17 @@ async def test_large_history_with_many_credentials_keeps_status_answering(
             await service.bridge.close()
     assert len(result["messages"]) == 200
     assert SESSION_TOKEN not in json.dumps(result)
-    assert result["messages"][0]["content"].startswith("[redacted] a line")
+    assert result["messages"][0]["content"] == "[redacted]"
+    assert result["messages"][1]["content"] == history[1]["content"]
     assert max(latencies) < 0.5, f"status took {max(latencies):.2f} s during the read"
     # Each history is redacted in a worker thread, never on the loop's thread.
     assert redacting_threads and threading.get_ident() not in redacting_threads
 
 
-async def test_non_plain_credential_and_its_quoted_form_are_redacted(gateway: Any) -> None:
+async def test_a_string_holding_a_credential_in_any_spelling_is_replaced_whole(
+    gateway: Any,
+) -> None:
+    """Raw, URL-quoted and in a key: the whole string goes, not only the matched spelling."""
     state, cli, _ = gateway
     credential = 'tok"en=1/2 x'
     state.detail.update(
@@ -802,20 +806,88 @@ async def test_non_plain_credential_and_its_quoted_form_are_redacted(gateway: An
     crew = Crew(str(cli))
     crew._secrets.add(credential)
     result = await crew.detail("design")
-    assert result["messages"][0]["content"] == "raw [redacted] quoted [redacted]"
+    assert result["messages"][0]["content"] == "[redacted]"
+    assert result["messages"][1]["content"] == "clean"
     assert result["messages"][1]["meta"] == {"[redacted]": "as a key"}
 
 
 async def test_a_credential_echoed_only_in_json_escaped_form_is_redacted(gateway: Any) -> None:
-    """The raw text holds `tok\\"en`, never `tok"en` and never its quoted form, and no `\\u`:
-    only the plain-forms condition of the shortcut keeps the decoded tree walked."""
+    """The raw text holds `tok\\"en`, never `tok"en`, and no `\\u` or `%`: only the
+    plain-credentials condition of the shortcut keeps the decoded tree walked."""
     state, cli, _ = gateway
     credential = 'tok"en'
     state.detail.update(messages=[{"role": "user", "content": f"saw {credential}"}], total=1)
     crew = Crew(str(cli))
     crew._secrets.add(credential)
     result = await crew.detail("design")
-    assert result["messages"][0]["content"] == "saw [redacted]"
+    assert result["messages"][0]["content"] == "[redacted]"
+
+
+@pytest.mark.parametrize(
+    ("credential", "echo"),
+    [
+        pytest.param("tok/en", "tok%2fen", id="lowercase-percent-hex"),
+        pytest.param("token", "tok%65n", id="percent-encoded-unreserved"),
+        pytest.param("tok/en=1", "see tok%2fen%3D1 here", id="mixed-case-in-a-sentence"),
+        pytest.param("tok😀en", "tok%F0%9F%98%80en", id="percent-encoded-utf8-non-bmp"),
+        pytest.param("token", "%74%6F%6b%65%6E", id="every-character-encoded"),
+    ],
+)
+async def test_url_encoded_credential_echoes_are_redacted_in_values_and_keys(
+    gateway: Any, credential: str, echo: str
+) -> None:
+    """`quote()` writes uppercase hex and leaves unreserved characters alone, but a gateway
+    may echo a credential in any legal encoding (T-281 review). One `unquote` pass of each
+    string is tested against the raw credentials, and the whole string is replaced."""
+    state, cli, _ = gateway
+    assert credential not in echo
+    state.detail.update(
+        messages=[{"role": "user", "content": echo, "meta": {echo: 1, "kept": "k%20v"}}],
+        total=1,
+    )
+    crew = Crew(str(cli))
+    crew._secrets.add(credential)
+    result = await crew.detail("design")
+    assert result["messages"][0] == {
+        "role": "user",
+        "content": "[redacted]",
+        "meta": {"[redacted]": 1, "kept": "k%20v"},
+    }
+    assert credential not in json.dumps(result)
+
+
+def test_overlapping_credentials_and_number_looking_strings() -> None:
+    """Static probes from the T-281 review, run against the worker's function directly."""
+    credentials = ("abc", "abcdef", "123456")
+    payload = json.dumps({"outer": [{"abcdef": "abc"}, {"n": "123456", "m": 123456}]}).encode()
+    assert Crew._redact_payload(payload, credentials) == {
+        "outer": [{"[redacted]": "[redacted]"}, {"n": "[redacted]", "m": 123456}]
+    }
+
+
+def test_a_non_bmp_credential_spelled_as_a_json_surrogate_pair_is_redacted() -> None:
+    """`json.loads` joins `\\\\ud83d\\\\ude00` into one character; the walk then finds it."""
+    payload = b'{"value":"tok\\ud83d\\ude00en","other":"tok\\ud83den"}'
+    assert Crew._redact_payload(payload, ("tok😀en",)) == {
+        "value": "[redacted]",
+        "other": "tok\ud83den",
+    }
+
+
+def test_a_response_without_an_echo_or_an_escape_takes_the_shortcut() -> None:
+    """Plain credentials, no `\\u`, no `%` and no raw credential: the decoded value comes back
+    as parsed. A lone `%` in the text is enough to take the walk."""
+    credentials = ("c2Vzc2lvbj1hYmM=", "token")
+    payload = json.dumps({"content": "a 100 per cent clean line", "n": 1}).encode()
+    assert Crew._redact_payload(payload, credentials) == {
+        "content": "a 100 per cent clean line",
+        "n": 1,
+    }
+    payload = json.dumps({"content": "100% clean", "echo": "t%6fken"}).encode()
+    assert Crew._redact_payload(payload, credentials) == {
+        "content": "100% clean",
+        "echo": "[redacted]",
+    }
 
 
 async def test_unicode_escaped_credential_echo_is_redacted(gateway: Any) -> None:

@@ -39,7 +39,7 @@ from datetime import datetime
 from http.cookiejar import CookieJar
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qsl, quote, urljoin, urlsplit
+from urllib.parse import parse_qsl, quote, unquote, urljoin, urlsplit
 from uuid import UUID
 
 import httpx2
@@ -66,9 +66,13 @@ _VERSION_LINE = re.compile(
     r"((?:[-+_][a-z0-9]|\.?[a-z])[a-z0-9.+_-]{0,31})?",
     re.IGNORECASE,
 )
-# The characters `quote()` never escapes (RFC 3986 unreserved) and no JSON encoder
-# escapes either: a credential made only of these can be echoed in exactly one spelling.
-_PLAIN = re.compile(r"[A-Za-z0-9._~-]+")
+# The characters a JSON encoder can spell only literally or as `\uXXXX`: everything but
+# the quote, the backslash, the solidus (`\/` is a legal escape) and the control
+# characters. A credential made only of these appears verbatim in the raw text wherever a
+# decoded string holds it, unless the text spells a character with `\u` or percent-encodes
+# the credential; `_redact_payload` checks both before it skips the walk.
+_PLAIN = re.compile(r'[^"\\/\x00-\x1f]+')
+_REDACTED = "[redacted]"
 _STATE_FLAGS = (
     "running",
     "admission_queued",
@@ -384,48 +388,59 @@ class Crew:
             _CreationReceipts(receipt_path) if receipt_path is not None else None
         )
 
-    def _forms(self) -> tuple[str, ...]:
-        """Every string a held credential can be echoed as, longest first: the credential
-        and its URL-quoted form. Read on the event loop, where `_secrets` is written, and
-        handed to the worker thread as a tuple so the set is never read from two threads."""
-        forms = {form for secret in self._secrets for form in (secret, quote(secret, safe=""))}
-        return tuple(sorted(forms, key=len, reverse=True))
+    def _credentials(self) -> tuple[str, ...]:
+        """An immutable snapshot of the held credentials. Read on the event loop, where
+        `_secrets` is written, and handed to the worker thread as a tuple so the set is
+        never read from two threads."""
+        return tuple(self._secrets)
 
     @staticmethod
-    def _redact_payload(payload: bytes, forms: tuple[str, ...]) -> Any:
+    def _redact_payload(payload: bytes, credentials: tuple[str, ...]) -> Any:
         """Decode one response and remove every credential echo. Runs in a worker thread:
         a 200-message history is megabytes, and walking it on the loop for every held
         credential stalled the service for seconds once the set had grown (T-281).
 
-        The walk is skipped only when it cannot find anything: every form is made of
-        characters no JSON encoder escapes and `quote()` leaves alone (`_PLAIN`), the text
-        holds no `\\u` escape (the one JSON escape that can spell such a character), and
-        no form is in the text. Then a decoded string contains a form only if the text
-        does. Anything else takes the walk over the decoded tree, as before.
+        The walk is skipped only when it cannot find anything: every credential is made of
+        characters a JSON encoder writes literally (`_PLAIN`), the text holds no `\\u`
+        escape (the one JSON escape that can spell such a character), no `%` (a URL-encoded
+        echo, in any case of hex and of any character, decodes to the credential only when
+        the text holds a percent sign), and no credential is in the text. Then no string of
+        the decoded tree holds a credential raw or URL-encoded. Anything else takes the
+        walk over the decoded tree.
         """
         # What `json.loads(bytes)` does before parsing, so the text is what it would parse.
         text = payload.decode(json.detect_encoding(payload), "surrogatepass")
         value = json.loads(text)
         if (
-            all(_PLAIN.fullmatch(form) for form in forms)
+            all(_PLAIN.fullmatch(credential) for credential in credentials)
             and "\\u" not in text
-            and not any(form in text for form in forms)
+            and "%" not in text
+            and not any(credential in text for credential in credentials)
         ):
             return value
-        return Crew._redact(value, forms)
+        return Crew._redact(value, credentials)
 
     @staticmethod
-    def _redact(value: Any, forms: tuple[str, ...]) -> Any:
+    def _redact(value: Any, credentials: tuple[str, ...]) -> Any:
+        """Replace every string (and key) that holds a credential, raw or after one
+        URL-decoding pass, with the redaction marker. The whole string goes: a Crew payload
+        string that embeds a credential is not something the bridge needs to keep, and
+        replacing only the spelling that matched would leave every other spelling
+        (`%2f` for `%2F`, `%65` for `e`, mixed) for a reader to decode."""
         if isinstance(value, str):
-            for form in forms:
-                if form in value:
-                    value = value.replace(form, "[redacted]")
+            if any(credential in value for credential in credentials):
+                return _REDACTED
+            if "%" in value:
+                decoded = unquote(value, errors="surrogateescape")
+                if any(credential in decoded for credential in credentials):
+                    return _REDACTED
             return value
         if isinstance(value, list):
-            return [Crew._redact(item, forms) for item in value]
+            return [Crew._redact(item, credentials) for item in value]
         if isinstance(value, dict):
             return {
-                Crew._redact(key, forms): Crew._redact(item, forms) for key, item in value.items()
+                Crew._redact(key, credentials): Crew._redact(item, credentials)
+                for key, item in value.items()
             }
         return value
 
@@ -643,9 +658,9 @@ class Crew:
         await self._authenticate()
         async with self._io_lock:
             payload = await self._run_http(method, f"{self.origin}{path}", body, headers)
-        forms = self._forms()
+        credentials = self._credentials()
         try:
-            return await asyncio.to_thread(self._redact_payload, payload, forms)
+            return await asyncio.to_thread(self._redact_payload, payload, credentials)
         except (ValueError, UnicodeDecodeError, RecursionError):
             raise BridgeError("Crew returned an unsupported JSON response") from None
 
