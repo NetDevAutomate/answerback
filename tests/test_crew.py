@@ -738,7 +738,9 @@ def large_history(messages: int = 200, content: int = 10_000, meta: int = 120) -
     ]
 
 
-async def test_large_history_with_many_credentials_keeps_status_answering(gateway: Any) -> None:
+async def test_large_history_with_many_credentials_keeps_status_answering(
+    gateway: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """T-281: redaction of a megabytes-long history, repeated for every held credential, ran
     on the event loop and stalled the service for seconds. The walk path is forced here: one
     credential is echoed and one is not plain, so the text shortcut cannot apply."""
@@ -749,6 +751,14 @@ async def test_large_history_with_many_credentials_keeps_status_answering(gatewa
     crew = Crew(str(cli))
     crew._secrets.update(secrets.token_hex(32) for _ in range(40))
     crew._secrets.add("c2Vzc2lvbj1hYmM=")
+    redacting_threads: list[int] = []
+    redact_payload = Crew._redact_payload
+
+    def observed(payload: bytes, forms: tuple[str, ...]) -> Any:
+        redacting_threads.append(threading.get_ident())
+        return redact_payload(payload, forms)
+
+    monkeypatch.setattr(Crew, "_redact_payload", staticmethod(observed))
     with tempfile.TemporaryDirectory(prefix="hb-", dir="/tmp") as directory:
         config_path = Path(directory) / "config.json"
         Config(provider_selection=[]).save(config_path)
@@ -775,6 +785,8 @@ async def test_large_history_with_many_credentials_keeps_status_answering(gatewa
     assert SESSION_TOKEN not in json.dumps(result)
     assert result["messages"][0]["content"].startswith("[redacted] a line")
     assert max(latencies) < 0.5, f"status took {max(latencies):.2f} s during the read"
+    # Each history is redacted in a worker thread, never on the loop's thread.
+    assert redacting_threads and threading.get_ident() not in redacting_threads
 
 
 async def test_non_plain_credential_and_its_quoted_form_are_redacted(gateway: Any) -> None:

@@ -8,13 +8,14 @@ to, stay in the maintainers' private archive.
 
 ### Fixed
 
-- **The service stalled for seconds while it read Crew chat histories, so `status` timed
-  out and the fleet panels showed "offline".** The Crew provider removes every credential it
-  holds (link tokens and session cookies, a set that grows at each hourly login) from every
+- **Reading a Crew chat history could block the service for seconds, long enough for `status`
+  to time out in the fleet writer and the panels to show "offline".** The Crew provider removes
+  every credential it holds (link tokens and session cookies, a set that grows at each hourly login) from every
   response it decodes. It did that on the event loop, once per string of the decoded tree and
   once per credential, re-quoting the credential each time: a 200-message history of a few
-  megabytes with forty credentials blocked the loop for one to two seconds, for every Crew chat
-  at every tracing scan. The redaction now runs in a worker thread, computes the credential
+  megabytes with forty credentials blocked the loop for one to two seconds in a reproduction,
+  for every Crew chat at every tracing scan; the CPU profile of the work Mac's stalls matches
+  this path. The redaction now runs in a worker thread, computes the credential
   forms once, and skips the walk when the raw text cannot hold an echo (every form is made of
   URL-unreserved characters, the text has no `\u` escape and no form is in it); otherwise the
   same walk over the decoded tree runs as before. What is removed is unchanged.

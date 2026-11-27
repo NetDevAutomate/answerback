@@ -258,9 +258,11 @@ answerback status --json | grep -A4 '"loop"'
 answerback logs --lines 1000 | grep -c '"loop_lag"'
 ```
 
-A count above 0 names the service; 0 names the writer's own cycle. The one known cause, Crew
-history redaction on the loop, was fixed after 0.16.2 (changelog); a new one is a bug to report
-with the `loop_lag` lines and `answerback status --json`.
+A count above 0 shows the service's loop was blocked since it started; match the times against
+the outage. A count of 0 does not clear the service (shorter blocks, socket problems and a
+restart leave no entry); read the writer's log too. The one known cause, Crew history redaction
+on the loop, was fixed after 0.16.2 (changelog); a new one is a bug to report with the `loop_lag`
+entries and `answerback status --json`.
 
 More: [When the panels say the service is offline while it runs](OPERATIONS.md#when-the-panels-say-the-service-is-offline-while-it-runs).
 

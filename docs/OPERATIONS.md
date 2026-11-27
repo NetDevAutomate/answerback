@@ -109,9 +109,12 @@ answerback logs --lines 1000 | grep -A1 '"loop_lag"'
       "seconds": 1.116
 ```
 
-A `lag_events` of 0 with "offline" panels means the writer, not the service, could not keep its
-cycle (its own log says why). The guard sleeps 0.1 seconds between measurements and reads a
-block when it ends, so a delay it reports is up to 0.1 seconds shorter than the block was.
+A count above 0 shows the loop was blocked since the service started; match `last_lag_at` and
+the `loop_lag` entries against the time the panels went offline. A count of 0 does not clear
+the service: a block shorter than 1 second, a socket problem or a restart (the count starts at
+0 again) leave no entry; read the writer's own log as well. The guard sleeps 0.1 seconds
+between measurements and reads a block when it ends, so a delay it reports is up to
+0.1 seconds shorter than the block was.
 
 ## Where the files are
 
