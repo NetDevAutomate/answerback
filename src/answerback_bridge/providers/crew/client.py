@@ -66,6 +66,9 @@ _VERSION_LINE = re.compile(
     r"((?:[-+_][a-z0-9]|\.?[a-z])[a-z0-9.+_-]{0,31})?",
     re.IGNORECASE,
 )
+# The characters `quote()` never escapes (RFC 3986 unreserved) and no JSON encoder
+# escapes either: a credential made only of these can be echoed in exactly one spelling.
+_PLAIN = re.compile(r"[A-Za-z0-9._~-]+")
 _STATE_FLAGS = (
     "running",
     "admission_queued",
@@ -381,16 +384,49 @@ class Crew:
             _CreationReceipts(receipt_path) if receipt_path is not None else None
         )
 
-    def _redact(self, value: Any) -> Any:
+    def _forms(self) -> tuple[str, ...]:
+        """Every string a held credential can be echoed as, longest first: the credential
+        and its URL-quoted form. Read on the event loop, where `_secrets` is written, and
+        handed to the worker thread as a tuple so the set is never read from two threads."""
+        forms = {form for secret in self._secrets for form in (secret, quote(secret, safe=""))}
+        return tuple(sorted(forms, key=len, reverse=True))
+
+    @staticmethod
+    def _redact_payload(payload: bytes, forms: tuple[str, ...]) -> Any:
+        """Decode one response and remove every credential echo. Runs in a worker thread:
+        a 200-message history is megabytes, and walking it on the loop for every held
+        credential stalled the service for seconds once the set had grown (T-281).
+
+        The walk is skipped only when it cannot find anything: every form is made of
+        characters no JSON encoder escapes and `quote()` leaves alone (`_PLAIN`), the text
+        holds no `\\u` escape (the one JSON escape that can spell such a character), and
+        no form is in the text. Then a decoded string contains a form only if the text
+        does. Anything else takes the walk over the decoded tree, as before.
+        """
+        # What `json.loads(bytes)` does before parsing, so the text is what it would parse.
+        text = payload.decode(json.detect_encoding(payload), "surrogatepass")
+        value = json.loads(text)
+        if (
+            all(_PLAIN.fullmatch(form) for form in forms)
+            and "\\u" not in text
+            and not any(form in text for form in forms)
+        ):
+            return value
+        return Crew._redact(value, forms)
+
+    @staticmethod
+    def _redact(value: Any, forms: tuple[str, ...]) -> Any:
         if isinstance(value, str):
-            for secret in sorted(self._secrets, key=len, reverse=True):
-                value = value.replace(secret, "[redacted]")
-                value = value.replace(quote(secret, safe=""), "[redacted]")
+            for form in forms:
+                if form in value:
+                    value = value.replace(form, "[redacted]")
             return value
         if isinstance(value, list):
-            return [self._redact(item) for item in value]
+            return [Crew._redact(item, forms) for item in value]
         if isinstance(value, dict):
-            return {self._redact(key): self._redact(item) for key, item in value.items()}
+            return {
+                Crew._redact(key, forms): Crew._redact(item, forms) for key, item in value.items()
+            }
         return value
 
     async def _check_gateway(self) -> None:
@@ -607,8 +643,9 @@ class Crew:
         await self._authenticate()
         async with self._io_lock:
             payload = await self._run_http(method, f"{self.origin}{path}", body, headers)
+        forms = self._forms()
         try:
-            return self._redact(json.loads(payload))
+            return await asyncio.to_thread(self._redact_payload, payload, forms)
         except (ValueError, UnicodeDecodeError, RecursionError):
             raise BridgeError("Crew returned an unsupported JSON response") from None
 

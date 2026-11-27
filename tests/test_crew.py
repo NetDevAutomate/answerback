@@ -3,16 +3,18 @@
 import asyncio
 import hashlib
 import json
+import secrets
 import socket
 import sqlite3
 import sys
+import tempfile
 import threading
 import time
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, quote, urlsplit
 from uuid import uuid4
 
 import pytest
@@ -22,8 +24,10 @@ from codex_herdr_bridge.crew import Crew, CrewIdentityChanged
 from codex_herdr_bridge.discovery import SelectionRequired
 from codex_herdr_bridge.errors import CrewVersionUnsupported
 from codex_herdr_bridge.process import BridgeError
+from codex_herdr_bridge.runtime import Service
 from codex_herdr_bridge.service import Bridge
 from codex_herdr_bridge.tasks import TaskStore
+from codex_herdr_bridge.transport import FRAME_LIMIT, RemoteBridge
 
 LINK_TOKEN = "fixture-link-credential"
 SESSION_TOKEN = "fixture-session-credential"
@@ -91,6 +95,7 @@ class Gateway:
         }
         self.project_override: str | None = None
         self.raw_slots: bytes | None = None
+        self.raw_detail: bytes | None = None
         self.create_key: str | None = None
         self.slow_slots = False
         self.slow_headers = False
@@ -172,7 +177,7 @@ def gateway(tmp_path: Path) -> Iterator[tuple[Gateway, Path, str]]:
             if parsed.path == "/api/chat/slots":
                 self.respond(state.slots, raw=state.raw_slots)
             elif parsed.path.startswith("/api/chat/slots/"):
-                self.respond(state.detail)
+                self.respond(state.detail, raw=state.raw_detail)
             elif parsed.path == "/dashboard":
                 self.respond({})
             else:
@@ -718,6 +723,97 @@ async def test_detail_is_bounded_read_only_and_redacts_credential_echoes(gateway
     assert state.requests[-1]["path"] == "/api/chat/slots/design?limit=200&cursor=1"
     assert LINK_TOKEN not in json.dumps(result)
     assert SESSION_TOKEN not in json.dumps(result)
+
+
+def large_history(messages: int = 200, content: int = 10_000, meta: int = 120) -> list[dict]:
+    """A history the size of a busy chat: ~2.7 MB, ~24k strings once decoded."""
+    text = ("a line of ordinary worker output, nothing secret in it at all\n" * 200)[:content]
+    return [
+        {
+            "role": "assistant" if index % 2 else "user",
+            "content": text,
+            "meta": {f"field{key}": f"value-{key}-{index}" for key in range(meta)},
+        }
+        for index in range(messages)
+    ]
+
+
+async def test_large_history_with_many_credentials_keeps_status_answering(gateway: Any) -> None:
+    """T-281: redaction of a megabytes-long history, repeated for every held credential, ran
+    on the event loop and stalled the service for seconds. The walk path is forced here: one
+    credential is echoed and one is not plain, so the text shortcut cannot apply."""
+    state, cli, _ = gateway
+    history = large_history()
+    history[0]["content"] = f"{SESSION_TOKEN} {history[0]['content']}"
+    state.detail.update(messages=history, total=len(history))
+    crew = Crew(str(cli))
+    crew._secrets.update(secrets.token_hex(32) for _ in range(40))
+    crew._secrets.add("c2Vzc2lvbj1hYmM=")
+    with tempfile.TemporaryDirectory(prefix="hb-", dir="/tmp") as directory:
+        config_path = Path(directory) / "config.json"
+        Config(provider_selection=[]).save(config_path)
+        service = Service(config_path)
+        service.bridge = Bridge(Config.load(config_path), config_path)
+        service.path.parent.mkdir(mode=0o700)
+        server = await asyncio.start_unix_server(
+            service.handle, path=str(service.path), limit=FRAME_LIMIT
+        )
+        remote = RemoteBridge(config_path)
+        latencies: list[float] = []
+        try:
+            reading = asyncio.create_task(crew.detail("design"))
+            while not reading.done():
+                started = time.monotonic()
+                assert (await remote.call("status", {}))["running"] is True
+                latencies.append(time.monotonic() - started)
+            result = await reading
+        finally:
+            server.close()
+            await server.wait_closed()
+            await service.bridge.close()
+    assert len(result["messages"]) == 200
+    assert SESSION_TOKEN not in json.dumps(result)
+    assert result["messages"][0]["content"].startswith("[redacted] a line")
+    assert max(latencies) < 0.5, f"status took {max(latencies):.2f} s during the read"
+
+
+async def test_non_plain_credential_and_its_quoted_form_are_redacted(gateway: Any) -> None:
+    state, cli, _ = gateway
+    credential = 'tok"en=1/2 x'
+    state.detail.update(
+        messages=[
+            {"role": "user", "content": f"raw {credential} quoted {quote(credential, safe='')}"},
+            {"role": "user", "content": "clean", "meta": {credential: "as a key"}},
+        ],
+        total=2,
+    )
+    crew = Crew(str(cli))
+    crew._secrets.add(credential)
+    result = await crew.detail("design")
+    assert result["messages"][0]["content"] == "raw [redacted] quoted [redacted]"
+    assert result["messages"][1]["meta"] == {"[redacted]": "as a key"}
+
+
+async def test_unicode_escaped_credential_echo_is_redacted(gateway: Any) -> None:
+    """A `\\u` escape can spell a plain character, so a text that holds one never takes the
+    shortcut; the decoded value is walked and the echo found, in a value and in a key."""
+    state, cli, _ = gateway
+    escaped = "".join(f"\\u{ord(char):04x}" for char in SESSION_TOKEN[:4]) + SESSION_TOKEN[4:]
+    assert SESSION_TOKEN not in escaped
+    detail = json.dumps(
+        {
+            **state.detail,
+            "messages": [{"role": "user", "content": "<content>", "meta": {"<key>": 1}}],
+            "total": 1,
+        }
+    )
+    state.raw_detail = detail.replace("<content>", escaped).replace("<key>", escaped).encode()
+    result = await Crew(str(cli)).detail("design")
+    assert result["messages"][0] == {
+        "role": "user",
+        "content": "[redacted]",
+        "meta": {"[redacted]": 1},
+    }
 
 
 async def test_create_sets_project_before_return_and_reuses_matching_identity(
