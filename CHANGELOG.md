@@ -6,6 +6,8 @@ to, stay in the maintainers' private archive.
 
 ## Unreleased
 
+## 0.16.3 - 2026-11-27
+
 ### Fixed
 
 - **Reading a Crew chat history could block the service for seconds, long enough for `status`
