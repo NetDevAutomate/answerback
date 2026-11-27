@@ -100,13 +100,13 @@ You need a copy of the source tree and [`uv`](https://docs.astral.sh/uv/), which
 supported Python if you have none. The self-test needs no account, no API key and no model:
 
 ```sh
-git clone <repository URL> answerback
+git clone https://github.com/NetDevAutomate/answerback.git
 cd answerback
 uv run --no-dev answerback self-test
 ```
 
-The repository is shared as a git clone and has no public hosting yet; `<repository URL>` is
-the address of the clone you were given.
+The source is on GitHub at [NetDevAutomate/answerback](https://github.com/NetDevAutomate/answerback);
+releases are tagged `v<version>`.
 
 Two scripted agents hand each other a task through a throwaway bridge, both requests are sent
 again, the service restarts, and everything is deleted. That takes about five seconds once the
@@ -356,8 +356,8 @@ secret carried only in the envelope command is not implemented.
   ([Provider backoff](docs/RECIPIENTS.md#provider-backoff)).
 - **Platforms:** macOS and Linux. On Linux the systemd user unit is generated and tested, with no
   live run on record. Windows is not supported.
-- **Release:** no package on PyPI yet and no public issue tracker yet. It is provided as is under
-  the Apache-2.0 licence.
+- **Release:** no package on PyPI yet; install from the source tree. Issues go to the GitHub
+  repository's tracker. It is provided as is under the Apache-2.0 licence.
 
 ## Documentation
 
