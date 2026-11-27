@@ -52,8 +52,10 @@ inside the same brackets: each `uv tool install` replaces the earlier set.
 
 1. Read what the node had: `cat ~/.local/share/uv/tools/answerback/uv-receipt.toml` lists the
    extras and every `--with` package.
-2. Clone this repository (and, on a node that had the plugin, the internal repository beside it)
-   under `~/code/personal/tools/`.
+2. Clone this repository under `~/code/personal/tools/`:
+   `git clone https://github.com/NetDevAutomate/answerback.git ~/code/personal/tools/answerback`.
+   On a node that had the plugin, clone the internal repository beside it (its address is not
+   public).
 3. `answerback stop`, then reinstall from the clones with the command above that matches the
    node's composition, with the same extras, then `answerback start` and
    `answerback status --json`: `version` is `0.16.2`.

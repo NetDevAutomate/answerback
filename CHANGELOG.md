@@ -6,6 +6,13 @@ to, stay in the maintainers' private archive.
 
 ## Unreleased
 
+### Documentation
+
+- README, SECURITY and MIGRATION name the public repository,
+  [github.com/NetDevAutomate/answerback](https://github.com/NetDevAutomate/answerback): the clone
+  command, tagged releases, the issue tracker and GitHub private vulnerability reporting replace
+  the repository-split placeholders. There is still no package on PyPI.
+
 ### Receipts
 
 - **A receipt can carry a subject: what the sender says the hand-off is about.** `answerback
