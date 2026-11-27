@@ -39,7 +39,7 @@ from datetime import datetime
 from http.cookiejar import CookieJar
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qsl, quote, unquote, urljoin, urlsplit
+from urllib.parse import parse_qsl, quote, unquote, unquote_plus, urljoin, urlsplit
 from uuid import UUID
 
 import httpx2
@@ -73,8 +73,9 @@ _VERSION_LINE = re.compile(
 # the quote, the backslash, the solidus (`\/` is a legal escape) and the control
 # characters. A credential made only of these appears verbatim in the raw text wherever a
 # decoded string holds it, unless the text spells a character with `\u` or percent-encodes
-# the credential; `_redact_payload` checks both before it skips the walk.
-_PLAIN = re.compile(r'[^"\\/\x00-\x1f]+')
+# the credential; `_redact_payload` checks both before it skips the walk. The space is
+# left out too: form encoding spells it `+`, which neither check would see.
+_PLAIN = re.compile(r'[^"\\/\x00-\x20]+')
 _REDACTED = "[redacted]"
 _STATE_FLAGS = (
     "running",
@@ -445,10 +446,15 @@ class Crew:
         if isinstance(value, str):
             if any(credential in value for credential in credentials):
                 return _REDACTED
-            if "%" in value:
-                decoded = unquote(value, errors="surrogateescape")
-                if any(credential in decoded for credential in credentials):
-                    return _REDACTED
+            if "%" in value or "+" in value:
+                # Both conventions for one pass: `+` is a plus in a path and a space in a
+                # form or query (`parse_qsl`, which learns the link token, reads it so).
+                for decoded in (
+                    unquote(value, errors="surrogateescape"),
+                    unquote_plus(value, errors="surrogateescape"),
+                ):
+                    if any(credential in decoded for credential in credentials):
+                        return _REDACTED
             return value
         if isinstance(value, list):
             return [Crew._redact(item, credentials) for item in value]

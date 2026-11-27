@@ -749,8 +749,8 @@ async def test_large_history_with_many_credentials_keeps_status_answering(
     history[0]["content"] = f"{SESSION_TOKEN} {history[0]['content']}"
     state.detail.update(messages=history, total=len(history))
     crew = Crew(str(cli))
-    crew._secrets.update(secrets.token_hex(32) for _ in range(40))
-    crew._secrets.add("c2Vzc2lvbj1hYmM=")
+    crew._learn(secrets.token_hex(32) for _ in range(40))
+    crew._learn(("c2Vzc2lvbj1hYmM=",))
     redacting_threads: list[int] = []
     redact_payload = Crew._redact_payload
 
@@ -804,7 +804,7 @@ async def test_a_string_holding_a_credential_in_any_spelling_is_replaced_whole(
         total=2,
     )
     crew = Crew(str(cli))
-    crew._secrets.add(credential)
+    crew._learn((credential,))
     result = await crew.detail("design")
     assert result["messages"][0]["content"] == "[redacted]"
     assert result["messages"][1]["content"] == "clean"
@@ -818,7 +818,7 @@ async def test_a_credential_echoed_only_in_json_escaped_form_is_redacted(gateway
     credential = 'tok"en'
     state.detail.update(messages=[{"role": "user", "content": f"saw {credential}"}], total=1)
     crew = Crew(str(cli))
-    crew._secrets.add(credential)
+    crew._learn((credential,))
     result = await crew.detail("design")
     assert result["messages"][0]["content"] == "[redacted]"
 
@@ -831,6 +831,8 @@ async def test_a_credential_echoed_only_in_json_escaped_form_is_redacted(gateway
         pytest.param("tok/en=1", "see tok%2fen%3D1 here", id="mixed-case-in-a-sentence"),
         pytest.param("tok😀en", "tok%F0%9F%98%80en", id="percent-encoded-utf8-non-bmp"),
         pytest.param("token", "%74%6F%6b%65%6E", id="every-character-encoded"),
+        pytest.param("tok en", "tok+en", id="form-encoded-space"),
+        pytest.param("tok+en", "tok%2Ben", id="encoded-plus"),
     ],
 )
 async def test_url_encoded_credential_echoes_are_redacted_in_values_and_keys(
@@ -846,7 +848,7 @@ async def test_url_encoded_credential_echoes_are_redacted_in_values_and_keys(
         total=1,
     )
     crew = Crew(str(cli))
-    crew._secrets.add(credential)
+    crew._learn((credential,))
     result = await crew.detail("design")
     assert result["messages"][0] == {
         "role": "user",
@@ -874,20 +876,49 @@ def test_a_non_bmp_credential_spelled_as_a_json_surrogate_pair_is_redacted() -> 
     }
 
 
-def test_a_response_without_an_echo_or_an_escape_takes_the_shortcut() -> None:
+def walk_counter(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
+    """Record each container the walk visits; the payloads below are flat, so one entry is
+    one walk `_redact_payload` did not skip."""
+    walks: list[Any] = []
+    redact = Crew._redact
+
+    def counted(value: Any, credentials: tuple[str, ...]) -> Any:
+        if isinstance(value, dict | list):
+            walks.append(value)
+        return redact(value, credentials)
+
+    monkeypatch.setattr(Crew, "_redact", staticmethod(counted))
+    return walks
+
+
+def test_a_response_without_an_echo_or_an_escape_takes_the_shortcut(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Plain credentials, no `\\u`, no `%` and no raw credential: the decoded value comes back
-    as parsed. A lone `%` in the text is enough to take the walk."""
+    as parsed without a walk. A lone `%` in the text is enough to take the walk."""
+    walks = walk_counter(monkeypatch)
     credentials = ("c2Vzc2lvbj1hYmM=", "token")
     payload = json.dumps({"content": "a 100 per cent clean line", "n": 1}).encode()
     assert Crew._redact_payload(payload, credentials) == {
         "content": "a 100 per cent clean line",
         "n": 1,
     }
+    assert walks == []
     payload = json.dumps({"content": "100% clean", "echo": "t%6fken"}).encode()
     assert Crew._redact_payload(payload, credentials) == {
         "content": "100% clean",
         "echo": "[redacted]",
     }
+    assert len(walks) == 1
+
+
+def test_a_credential_with_a_space_always_takes_the_walk(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A space is not plain: `tok+en` holds neither `%` nor `\\u` nor the raw `tok en`, so only
+    the plain-credentials condition keeps the walk, where `unquote_plus` finds it."""
+    walks = walk_counter(monkeypatch)
+    payload = json.dumps({"echo": "tok+en", "sum": "1+1"}).encode()
+    assert Crew._redact_payload(payload, ("tok en",)) == {"echo": "[redacted]", "sum": "1+1"}
+    assert len(walks) == 1
 
 
 async def test_unicode_escaped_credential_echo_is_redacted(gateway: Any) -> None:
@@ -958,9 +989,11 @@ async def test_a_credential_learned_while_a_response_is_redacted_is_still_remove
     monkeypatch.setattr(crew, "_run_http", http)
     monkeypatch.setattr(crew, "_redact_payload", paused)
     first = asyncio.create_task(crew._request("GET", "/first"))
-    assert await asyncio.to_thread(entered.wait, 5)
-    assert await crew._request("GET", "/second") == {"ok": True}
-    release.set()
+    try:
+        assert await asyncio.to_thread(entered.wait, 5)
+        assert await crew._request("GET", "/second") == {"ok": True}
+    finally:
+        release.set()
     assert await first == {"echo": "[redacted]"}
     assert snapshots == [(), ("future-cookie",)]
 

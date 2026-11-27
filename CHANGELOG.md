@@ -20,8 +20,9 @@ to, stay in the maintainers' private archive.
   (every credential is made of characters a JSON encoder writes literally, and the text has no
   `\u` escape, no `%` and no credential in it); otherwise the decoded tree is walked. What is
   removed changed: a string or key that holds a credential, raw or after one URL-decoding pass
-  (so in any percent-encoded spelling, where before only the canonical uppercase spelling was
-  matched), is replaced whole by `[redacted]` instead of having the matched text cut out. A
+  (so in any percent-encoded spelling, with `+` read as a space too, where before only the
+  canonical uppercase spelling was matched), is replaced whole by `[redacted]` instead of
+  having the matched text cut out. A
   credential learned from a concurrent response while a redaction runs makes that redaction
   run again with the new snapshot, up to three times.
 
