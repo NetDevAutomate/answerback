@@ -529,6 +529,7 @@ async def test_status_and_task_list_keep_their_existing_fields(rpc: Any) -> None
         "bus",
         "providers",
         "clients",
+        "loop",
         "herdr_session",
         "desktop_aliases",
     }
