@@ -15,10 +15,15 @@ to, stay in the maintainers' private archive.
   once per credential, re-quoting the credential each time: a 200-message history of a few
   megabytes with forty credentials blocked the loop for about a second in a reproduction, for
   every Crew chat at every tracing scan; the CPU profile of the work Mac's 2-7 second stalls
-  matches this path and is not otherwise confirmed. The redaction now runs in a worker thread, computes the credential
-  forms once, and skips the walk when the raw text cannot hold an echo (every form is made of
-  URL-unreserved characters, the text has no `\u` escape and no form is in it); otherwise the
-  same walk over the decoded tree runs as before. What is removed is unchanged.
+  matches this path and is not otherwise confirmed. The redaction now runs in a worker thread
+  with a snapshot of the credentials, and skips the walk when the raw text cannot hold an echo
+  (every credential is made of characters a JSON encoder writes literally, and the text has no
+  `\u` escape, no `%` and no credential in it); otherwise the decoded tree is walked. What is
+  removed changed: a string or key that holds a credential, raw or after one URL-decoding pass
+  (so in any percent-encoded spelling, where before only the canonical uppercase spelling was
+  matched), is replaced whole by `[redacted]` instead of having the matched text cut out. A
+  credential learned from a concurrent response while a redaction runs makes that redaction
+  run again with the new snapshot, up to three times.
 
 ### Service
 
