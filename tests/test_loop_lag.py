@@ -5,6 +5,9 @@ import tempfile
 import time
 from pathlib import Path
 
+import pytest
+
+from answerback_bridge import runtime
 from codex_herdr_bridge.config import Config
 from codex_herdr_bridge.runtime import LOOP_LAG_SECONDS, Service
 from codex_herdr_bridge.transport import RemoteBridge
@@ -14,21 +17,24 @@ def block(seconds: float) -> None:
     time.sleep(seconds)
 
 
-async def test_a_block_longer_than_the_threshold_is_counted_and_logged(tmp_path: Path) -> None:
+async def test_a_block_longer_than_the_threshold_is_counted_and_logged(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A long watch interval makes the subtraction visible: the block starts 0.05 s into a
+    # 0.5 s sleep, so the measured delay is about 1.15 s when the interval is subtracted
+    # and about 1.65 s when it is not. The bounds leave 150 ms either side for scheduling.
+    monkeypatch.setattr(runtime, "LOOP_WATCH_SECONDS", 0.5)
     service = Service(tmp_path / "config.json")
     events: list[tuple[str, dict]] = []
     service.event = lambda name, **fields: events.append((name, fields))  # type: ignore[method-assign]
     watcher = asyncio.create_task(service.watch_loop())
-    # Armed first, then blocked for the threshold plus the watch interval and more, so the
-    # measured overrun exceeds the threshold whatever the sleep's phase was when it began.
     loop = asyncio.get_running_loop()
-    loop.call_later(0.05, block, LOOP_LAG_SECONDS + 0.5)
-    await asyncio.sleep(1.9)
+    loop.call_later(0.05, block, LOOP_LAG_SECONDS + 0.6)
+    await asyncio.sleep(2.2)
     service.stopping.set()
     await watcher
     assert service.loop_lag["lag_events"] == 1
-    # The lower bound holds whatever the sleep's phase; a loaded machine can only add to it.
-    assert service.loop_lag["max_lag_seconds"] > LOOP_LAG_SECONDS
+    assert LOOP_LAG_SECONDS < service.loop_lag["max_lag_seconds"] < LOOP_LAG_SECONDS + 0.4
     assert service.loop_lag["last_lag_seconds"] == service.loop_lag["max_lag_seconds"]
     assert service.loop_lag["last_lag_at"] is not None
     assert events == [("loop_lag", {"seconds": service.loop_lag["last_lag_seconds"]})]

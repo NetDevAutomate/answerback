@@ -806,6 +806,18 @@ async def test_non_plain_credential_and_its_quoted_form_are_redacted(gateway: An
     assert result["messages"][1]["meta"] == {"[redacted]": "as a key"}
 
 
+async def test_a_credential_echoed_only_in_json_escaped_form_is_redacted(gateway: Any) -> None:
+    """The raw text holds `tok\\"en`, never `tok"en` and never its quoted form, and no `\\u`:
+    only the plain-forms condition of the shortcut keeps the decoded tree walked."""
+    state, cli, _ = gateway
+    credential = 'tok"en'
+    state.detail.update(messages=[{"role": "user", "content": f"saw {credential}"}], total=1)
+    crew = Crew(str(cli))
+    crew._secrets.add(credential)
+    result = await crew.detail("design")
+    assert result["messages"][0]["content"] == "saw [redacted]"
+
+
 async def test_unicode_escaped_credential_echo_is_redacted(gateway: Any) -> None:
     """A `\\u` escape can spell a plain character, so a text that holds one never takes the
     shortcut; the decoded value is walked and the echo found, in a value and in a key."""
