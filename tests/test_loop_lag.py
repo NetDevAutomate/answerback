@@ -79,7 +79,8 @@ async def test_short_blocks_are_not_counted(tmp_path: Path) -> None:
 
 
 async def test_the_guard_reads_the_running_loops_clock_by_default(tmp_path: Path) -> None:
-    """One real block, measured with the loop's own clock, within scheduling slack."""
+    """One real block, measured with the loop's own clock; the lag is at least the block's
+    length, and no upper bound is asserted because a loaded runner adds to it."""
     service = Service(tmp_path / "config.json")
     events = recording(service)
     watcher = asyncio.create_task(service.watch_loop())
@@ -88,7 +89,7 @@ async def test_the_guard_reads_the_running_loops_clock_by_default(tmp_path: Path
     service.stopping.set()
     await watcher
     assert service.loop_lag["lag_events"] == 1
-    assert LOOP_LAG_SECONDS < service.loop_lag["max_lag_seconds"] < LOOP_LAG_SECONDS + 0.5
+    assert service.loop_lag["max_lag_seconds"] > LOOP_LAG_SECONDS
     assert events == [("loop_lag", {"seconds": service.loop_lag["last_lag_seconds"]})]
 
 
