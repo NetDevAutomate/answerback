@@ -63,7 +63,7 @@ work on another configuration. Without it the default path is used (next section
 | `start --standalone` | Detaches the bridge without a supervisor. For tests, not for a machine you leave running |
 | `restart` | Stops and starts the service. Interrupted receipts are not re-sent (below) |
 | `stop` | Removes the fleet writer's service, then the bridge's, asks the bridge to stop and waits up to 10 seconds for it to go |
-| `status [--json]` | Service identity, receipt counts, providers, clients and the fleet writer's state |
+| `status [--json]` | Service identity, receipt counts, providers, clients, the loop-lag guard's count (`loop`, below) and the fleet writer's state |
 | `doctor` | Probes each enabled provider. A provider whose plugin is not installed reads `disabled` with the reason |
 | `logs [--follow] [--lines N] [--json]` | Operational log lines, 1 to 1000 of them (default 50), with no task or result bodies |
 | `reset --connections` | Clears provider observations; pairings and receipts stay |
@@ -88,6 +88,30 @@ for malformed JSON. After 5 such failures within 120 seconds, `serve` logs a
 `crash_loop_guard` message and exits 0, so launchd and systemd stop restarting it every
 10 seconds. Fix the file, then run `answerback start`. The failure record is
 `runtime/start-failures.json` beside the config; a successful start clears it.
+
+### When the panels say the service is offline while it runs
+
+Every request the service answers waits for its event loop. When the loop is blocked, by one
+operation that computes for seconds, every caller waits that long: the fleet writer gives
+`status` 2 seconds and then writes `health.error: service did not answer in time`, and the
+Herdr App panels read "Answerback offline". The service counts such blocks itself. `status
+--json` carries a `loop` object: `lag_events` is the number of times the loop was found more
+than 1 second late since the service started, `max_lag_seconds` and `last_lag_seconds` the
+longest and the latest of those delays, `last_lag_at` the wall-clock time of the latest. Each
+one is also a `loop_lag` entry in the log, with the delay as `seconds`:
+
+```sh
+answerback logs --lines 1000 | grep -A1 '"loop_lag"'
+```
+
+```text
+      "event": "loop_lag",
+      "seconds": 1.116
+```
+
+A `lag_events` of 0 with "offline" panels means the writer, not the service, could not keep its
+cycle (its own log says why). The guard sleeps 0.1 seconds between measurements and reads a
+block when it ends, so a delay it reports is up to 0.1 seconds shorter than the block was.
 
 ## Where the files are
 

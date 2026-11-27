@@ -115,6 +115,13 @@ def test_start_is_idempotent_and_socket_is_private(runtime_config: Path) -> None
     assert status["running"] is True
     assert Path(status["socket"]).stat().st_mode & 0o777 == 0o600
     assert Path(status["socket"]).parent.stat().st_mode & 0o777 == 0o700
+    # The loop-lag guard runs from the start and has seen no block on an idle service.
+    assert status["loop"] == {
+        "lag_events": 0,
+        "max_lag_seconds": 0.0,
+        "last_lag_seconds": None,
+        "last_lag_at": None,
+    }
     stopped = cli(runtime_config, "stop")
     assert stopped["running"] is False
     assert cli(runtime_config, "stop")["running"] is False

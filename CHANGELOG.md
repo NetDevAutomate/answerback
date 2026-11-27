@@ -19,6 +19,15 @@ to, stay in the maintainers' private archive.
   URL-unreserved characters, the text has no `\u` escape and no form is in it); otherwise the
   same walk over the decoded tree runs as before. What is removed is unchanged.
 
+### Service
+
+- **The service counts the times its event loop was blocked.** A task on the loop sleeps
+  0.1 seconds and measures how late it wakes; a delay above 1 second is counted in `status
+  --json` under `loop` (`lag_events`, `max_lag_seconds`, `last_lag_seconds`, `last_lag_at`) and
+  logged as a `loop_lag` entry, so the next stall that makes the fleet writer or an MCP client
+  time out is visible on the service itself. See
+  [Operations](docs/OPERATIONS.md#when-the-panels-say-the-service-is-offline-while-it-runs).
+
 ### Documentation
 
 - README, SECURITY and MIGRATION name the public repository,

@@ -247,6 +247,23 @@ Fix or restore the config first; a successful start clears the recorded failures
 
 More: [If the service will not start after the upgrade](ANSWERBACK-UPGRADE.md#if-the-service-will-not-start-after-the-upgrade).
 
+**The Herdr App or the fleet document says "Answerback offline" while `answerback status`
+shows the service running.**
+The fleet writer gives `status` 2 seconds. A service whose event loop was blocked that long
+answers late, and the writer records `service did not answer in time`. The service counts those
+blocks: `loop.lag_events` in `status --json` and `loop_lag` lines in the log.
+
+```sh
+answerback status --json | grep -A4 '"loop"'
+answerback logs --lines 1000 | grep -c '"loop_lag"'
+```
+
+A count above 0 names the service; 0 names the writer's own cycle. The one known cause, Crew
+history redaction on the loop, was fixed after 0.16.2 (changelog); a new one is a bug to report
+with the `loop_lag` lines and `answerback status --json`.
+
+More: [When the panels say the service is offline while it runs](OPERATIONS.md#when-the-panels-say-the-service-is-offline-while-it-runs).
+
 **Where receipts and logs live.**
 Receipts are a `tasks.sqlite` file next to your config file; logs are `bridge.log` in that
 config's `runtime/` directory (for the default config,

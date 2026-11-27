@@ -50,6 +50,14 @@ CRASH_LOOP_FAILURE_LIMIT = 5
 CRASH_LOOP_WINDOW_SECONDS = 120.0
 MODULE_SHUTDOWN_TIMEOUT = 5.0
 FINAL_SHUTDOWN_TIMEOUT = 1.0
+# The loop-lag guard: a task sleeps LOOP_WATCH_SECONDS and measures how late it wakes. A
+# wake later than LOOP_LAG_SECONDS means the loop was blocked (every request waited that
+# long, and a watchdog with a 2 s budget may have called the service unreachable); it is
+# counted in `status` under `loop` and logged as a `loop_lag` event. The task runs on the
+# loop it watches, so it reports a block when the block ends and under-reads it by up to
+# LOOP_WATCH_SECONDS.
+LOOP_WATCH_SECONDS = 0.1
+LOOP_LAG_SECONDS = 1.0
 SERVICE_SHUTDOWN_FAILURE = 1
 _STARTUP_FAILURES_FILENAME = "start-failures.json"
 
@@ -107,6 +115,12 @@ class Service:
         self.slots = asyncio.Semaphore(4)
         self.rex_receiving = 0
         self.event_readers = 0
+        self.loop_lag: dict[str, Any] = {
+            "lag_events": 0,
+            "max_lag_seconds": 0.0,
+            "last_lag_seconds": None,
+            "last_lag_at": None,
+        }
         self.bridge: Bridge
         self.log = logging.getLogger(f"answerback_bridge.{self.instance_id}")
         self.log.propagate = False
@@ -133,6 +147,7 @@ class Service:
             "bus": self.bridge.module_statuses().get("bus", {}),
             "providers": self.bridge.provider_status,
             "clients": self.bridge.clients.snapshot(),
+            "loop": dict(self.loop_lag),
             "herdr_session": self.bridge.config.herdr_session,
             "desktop_aliases": list(self.bridge.config.desktop_threads),
             **self.bridge.remote_results(),
@@ -326,6 +341,22 @@ class Service:
                     except (BridgeError, OSError, ValueError) as error:
                         self.event("reconcile", outcome="error", error_type=type(error).__name__)
 
+    async def watch_loop(self) -> None:
+        """Count the times the event loop was blocked for longer than LOOP_LAG_SECONDS."""
+        loop = asyncio.get_running_loop()
+        while not self.stopping.is_set():
+            before = loop.time()
+            await asyncio.sleep(LOOP_WATCH_SECONDS)
+            lag = loop.time() - before - LOOP_WATCH_SECONDS
+            if lag > LOOP_LAG_SECONDS:
+                self.loop_lag["lag_events"] += 1
+                self.loop_lag["max_lag_seconds"] = round(
+                    max(self.loop_lag["max_lag_seconds"], lag), 3
+                )
+                self.loop_lag["last_lag_seconds"] = round(lag, 3)
+                self.loop_lag["last_lag_at"] = time.time()
+                self.event("loop_lag", seconds=round(lag, 3))
+
     async def serve(self) -> None:
         if os.name != "posix":
             raise BridgeError("The shared service currently requires macOS or Linux")
@@ -340,6 +371,7 @@ class Service:
         handler: RotatingFileHandler | None = None
         server: asyncio.Server | None = None
         reconciler: asyncio.Task[None] | None = None
+        watcher: asyncio.Task[None] | None = None
         modules_worker: asyncio.Task[None] | None = None
         observer: asyncio.Task[None] | None = None
         bound = False
@@ -380,6 +412,7 @@ class Service:
                 self.event("remote_unlisted_receipts", receipts=stranded)
             clear_startup_failures(self.config_path)
             reconciler = asyncio.create_task(self.reconcile())
+            watcher = asyncio.create_task(self.watch_loop())
             modules_worker = asyncio.create_task(self.run_modules())
             observer = asyncio.create_task(self.run_events())
             await self.stopping.wait()
@@ -406,6 +439,9 @@ class Service:
             if reconciler:
                 reconciler.cancel()
                 await asyncio.gather(reconciler, return_exceptions=True)
+            if watcher:
+                watcher.cancel()
+                await asyncio.gather(watcher, return_exceptions=True)
             if self.clients:
                 _, pending = await asyncio.wait(self.clients, timeout=5)
                 for task in pending:
