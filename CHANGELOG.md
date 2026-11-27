@@ -22,9 +22,9 @@ to, stay in the maintainers' private archive.
   removed changed: a string or key that holds a credential, raw or URL-decoded (percent escapes
   in either case, nested up to three levels deep, `+` read as a space too, where before only
   the canonical uppercase spelling was matched), is replaced whole by `[redacted]` instead of
-  having the matched text cut out. A
-  credential learned from a concurrent response while a redaction runs makes that redaction
-  run again with the new snapshot, up to three times.
+  having the matched text cut out; a string that matches no credential is kept, however deeply
+  it is encoded. A credential learned from a concurrent response while a redaction runs makes
+  that redaction run again with the new snapshot, up to three times.
 
 ### Service
 

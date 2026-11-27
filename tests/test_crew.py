@@ -842,8 +842,9 @@ async def test_url_encoded_credential_echoes_are_redacted_in_values_and_keys(
     gateway: Any, credential: str, echo: str
 ) -> None:
     """`quote()` writes uppercase hex and leaves unreserved characters alone, but a gateway
-    may echo a credential in any legal encoding (T-281 review). One `unquote` pass of each
-    string is tested against the raw credentials, and the whole string is replaced."""
+    may echo a credential in any legal encoding (T-281 review). Up to three decoding passes
+    of each string, with `unquote` and with `unquote_plus`, are tested against the raw
+    credentials, and the whole string is replaced on a hit."""
     state, cli, _ = gateway
     assert credential not in echo
     state.detail.update(
@@ -861,13 +862,21 @@ async def test_url_encoded_credential_echoes_are_redacted_in_values_and_keys(
     assert credential not in json.dumps(result)
 
 
-def test_a_string_nested_deeper_than_the_decoding_bound_is_treated_as_an_echo() -> None:
-    """Three passes read `%2525252F` down to `%2F` and the string is still changing, so it is
-    replaced unread; one level less decodes fully in three passes and is read."""
-    assert Crew._echoes("tok%2525252Fen", ("other",)) is True
+def test_a_string_nested_deeper_than_the_decoding_bound_is_kept_unless_it_matches() -> None:
+    """Three passes read `%2525252F` down to `%2F`, where the reading stops: a string that
+    matched no credential by then is kept, with or without credentials held (redaction
+    happens only on a hit). One level less decodes fully in three passes and is read."""
+    assert Crew._echoes("tok%2525252Fen", ()) is False
+    assert Crew._echoes("tok%2525252Fen", ("other",)) is False
+    assert Crew._echoes("tok%2525252Fen", ("tok/en",)) is False
     assert Crew._echoes("tok%25252Fen", ("other",)) is False
     assert Crew._echoes("tok%25252Fen", ("tok/en",)) is True
     assert Crew._echoes("100% sure, 1+1", ("token",)) is False
+    assert Crew._redact_payload(b'{"value":"%2525252F","%2525252F":1}', ()) == {
+        "value": "%2525252F",
+        "%2525252F": 1,
+    }
+    assert Crew._redact_payload(b'{"value":"%2525252F"}', ("other",)) == {"value": "%2525252F"}
 
 
 def test_overlapping_credentials_and_number_looking_strings() -> None:

@@ -441,10 +441,11 @@ class Crew:
     @staticmethod
     def _echoes(value: str, credentials: tuple[str, ...]) -> bool:
         """Whether a string holds a credential, raw or URL-encoded. Each decoding pass is
-        tested, until the string stops changing, in both conventions (`+` is a plus in a
-        path and a space in a form or query; `parse_qsl`, which learns the link token,
-        reads it so). A string still changing after DECODING_PASSES passes is nested deeper
-        than any gateway encodes and is treated as an echo rather than left unread."""
+        tested, until the string stops changing or DECODING_PASSES passes are done, in both
+        conventions (`+` is a plus in a path and a space in a form or query; `parse_qsl`,
+        which learns the link token, reads it so). Only a hit redacts: a string nested
+        deeper than the bound and never matching is kept, because no gateway encodes that
+        deep and a string that holds no credential is not the bridge's to replace."""
         if any(credential in value for credential in credentials):
             return True
         if "%" not in value and "+" not in value:
@@ -458,9 +459,6 @@ class Crew:
                 if any(credential in decoded for credential in credentials):
                     return True
                 text = decoded
-            else:
-                if decode(text, errors="surrogateescape") != text:
-                    return True
         return False
 
     @staticmethod
