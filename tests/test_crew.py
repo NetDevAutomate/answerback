@@ -924,6 +924,27 @@ def test_a_response_without_an_echo_or_an_escape_takes_the_shortcut(
     assert len(walks) == 1
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        b'{"a": "tok\\"en", "b": ["tok\\/en", {"tok\\u0065n": "x"}]}',
+        b'{"a": "tok%2fen", "b": "tok+en", "c": "tok%252Fen", "d": "\\ud83d\\ude00"}',
+        b'{"a": "clean", "b": ["also clean", {"n": 1, "f": 2.5, "t": true, "z": null}]}',
+        b'{"a": "to\\u006ben", "b": "tok\\u002Fen", "c": "tok en"}',
+        '{"a": "tok😀en", "b": "tok\\ud83den", "c": "\u00e9"}'.encode(),
+        b'\xef\xbb\xbf{"bom": "token"}',
+    ],
+    ids=["short-escapes", "url-spellings", "clean", "u-escapes", "non-bmp", "bom"],
+)
+def test_the_shortcut_returns_what_the_walk_would(payload: bytes) -> None:
+    """Whatever the raw text looks like, skipping the walk must give the tree the walk
+    gives: the shortcut is a cost saving, never a different answer."""
+    credentials = ("token", "tok/en", 'tok"en', "tok en", "tok😀en", "clean", "other")
+    for held in (credentials, credentials[:1], credentials[1:2], credentials[4:5], ()):
+        walked = Crew._redact(json.loads(payload), held)
+        assert Crew._redact_payload(payload, held) == walked
+
+
 def test_a_credential_with_a_space_always_takes_the_walk(monkeypatch: pytest.MonkeyPatch) -> None:
     """A space is not plain: `tok+en` holds neither `%` nor `\\u` nor the raw `tok en`, so only
     the plain-credentials condition keeps the walk, where `unquote_plus` finds it."""
