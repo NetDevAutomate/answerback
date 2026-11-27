@@ -833,6 +833,9 @@ async def test_a_credential_echoed_only_in_json_escaped_form_is_redacted(gateway
         pytest.param("token", "%74%6F%6b%65%6E", id="every-character-encoded"),
         pytest.param("tok en", "tok+en", id="form-encoded-space"),
         pytest.param("tok+en", "tok%2Ben", id="encoded-plus"),
+        pytest.param("tok/en", "tok%252Fen", id="double-encoded"),
+        pytest.param("tok/en", "tok%25252fen", id="triple-encoded-mixed-case"),
+        pytest.param("tok%en", "tok%2525en", id="credential-with-a-percent-encoded-twice"),
     ],
 )
 async def test_url_encoded_credential_echoes_are_redacted_in_values_and_keys(
@@ -856,6 +859,15 @@ async def test_url_encoded_credential_echoes_are_redacted_in_values_and_keys(
         "meta": {"[redacted]": 1, "kept": "k%20v"},
     }
     assert credential not in json.dumps(result)
+
+
+def test_a_string_nested_deeper_than_the_decoding_bound_is_treated_as_an_echo() -> None:
+    """Three passes read `%2525252F` down to `%2F` and the string is still changing, so it is
+    replaced unread; one level less decodes fully in three passes and is read."""
+    assert Crew._echoes("tok%2525252Fen", ("other",)) is True
+    assert Crew._echoes("tok%25252Fen", ("other",)) is False
+    assert Crew._echoes("tok%25252Fen", ("tok/en",)) is True
+    assert Crew._echoes("100% sure, 1+1", ("token",)) is False
 
 
 def test_overlapping_credentials_and_number_looking_strings() -> None:

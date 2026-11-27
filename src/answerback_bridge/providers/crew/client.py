@@ -55,6 +55,8 @@ HISTORY_LIMIT = 200
 # How many times one response is redacted when the credential set grows while a pass runs
 # in the worker thread; a set that moves on every pass is an error, not a loop.
 REDACTION_PASSES = 3
+# How many URL-decoding passes a string gets before it is treated as a credential echo.
+DECODING_PASSES = 3
 # The first release this client was written for; an older one is refused.
 MINIMUM_VERSION = (0, 12, 2)
 # Release series exercised end to end against this client (login, discovery, history,
@@ -437,25 +439,39 @@ class Crew:
         return Crew._redact(value, credentials)
 
     @staticmethod
+    def _echoes(value: str, credentials: tuple[str, ...]) -> bool:
+        """Whether a string holds a credential, raw or URL-encoded. Each decoding pass is
+        tested, until the string stops changing, in both conventions (`+` is a plus in a
+        path and a space in a form or query; `parse_qsl`, which learns the link token,
+        reads it so). A string still changing after DECODING_PASSES passes is nested deeper
+        than any gateway encodes and is treated as an echo rather than left unread."""
+        if any(credential in value for credential in credentials):
+            return True
+        if "%" not in value and "+" not in value:
+            return False
+        for decode in (unquote, unquote_plus):
+            text = value
+            for _ in range(DECODING_PASSES):
+                decoded = decode(text, errors="surrogateescape")
+                if decoded == text:
+                    break
+                if any(credential in decoded for credential in credentials):
+                    return True
+                text = decoded
+            else:
+                if decode(text, errors="surrogateescape") != text:
+                    return True
+        return False
+
+    @staticmethod
     def _redact(value: Any, credentials: tuple[str, ...]) -> Any:
-        """Replace every string (and key) that holds a credential, raw or after one
-        URL-decoding pass, with the redaction marker. The whole string goes: a Crew payload
-        string that embeds a credential is not something the bridge needs to keep, and
-        replacing only the spelling that matched would leave every other spelling
-        (`%2f` for `%2F`, `%65` for `e`, mixed) for a reader to decode."""
+        """Replace every string (and key) that holds a credential, raw or URL-encoded, with
+        the redaction marker. The whole string goes: a Crew payload string that embeds a
+        credential is not something the bridge needs to keep, and replacing only the
+        spelling that matched would leave every other spelling (`%2f` for `%2F`, `%65` for
+        `e`, mixed, nested) for a reader to decode."""
         if isinstance(value, str):
-            if any(credential in value for credential in credentials):
-                return _REDACTED
-            if "%" in value or "+" in value:
-                # Both conventions for one pass: `+` is a plus in a path and a space in a
-                # form or query (`parse_qsl`, which learns the link token, reads it so).
-                for decoded in (
-                    unquote(value, errors="surrogateescape"),
-                    unquote_plus(value, errors="surrogateescape"),
-                ):
-                    if any(credential in decoded for credential in credentials):
-                        return _REDACTED
-            return value
+            return _REDACTED if Crew._echoes(value, credentials) else value
         if isinstance(value, list):
             return [Crew._redact(item, credentials) for item in value]
         if isinstance(value, dict):
