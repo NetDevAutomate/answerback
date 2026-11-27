@@ -9,7 +9,7 @@ import stat
 import sys
 import time
 import uuid
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Callable
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any, cast
@@ -121,6 +121,9 @@ class Service:
             "last_lag_seconds": None,
             "last_lag_at": None,
         }
+        # The monotonic clock the loop-lag guard reads; None means the running loop's own.
+        # Tests script it so the arithmetic is checked without timing a real block.
+        self.clock: Callable[[], float] | None = None
         self.bridge: Bridge
         self.log = logging.getLogger(f"answerback_bridge.{self.instance_id}")
         self.log.propagate = False
@@ -344,18 +347,37 @@ class Service:
     async def watch_loop(self) -> None:
         """Count the times the event loop was blocked for longer than LOOP_LAG_SECONDS."""
         loop = asyncio.get_running_loop()
-        while not self.stopping.is_set():
-            before = loop.time()
-            await asyncio.sleep(LOOP_WATCH_SECONDS)
-            lag = loop.time() - before - LOOP_WATCH_SECONDS
-            if lag > LOOP_LAG_SECONDS:
-                self.loop_lag["lag_events"] += 1
-                self.loop_lag["max_lag_seconds"] = round(
-                    max(self.loop_lag["max_lag_seconds"], lag), 3
-                )
-                self.loop_lag["last_lag_seconds"] = round(lag, 3)
-                self.loop_lag["last_lag_at"] = time.time()
-                self.event("loop_lag", seconds=round(lag, 3))
+        clock = self.clock or loop.time
+        writes: set[asyncio.Task[None]] = set()
+        before = clock()
+        try:
+            while not self.stopping.is_set():
+                await asyncio.sleep(LOOP_WATCH_SECONDS)
+                now = clock()
+                lag = now - before - LOOP_WATCH_SECONDS
+                # The next window opens here, so whatever the bookkeeping below costs the
+                # loop is measured by it, like any other block.
+                before = now
+                if lag > LOOP_LAG_SECONDS:
+                    seconds = round(lag, 3)
+                    self.loop_lag["lag_events"] += 1
+                    self.loop_lag["max_lag_seconds"] = max(
+                        self.loop_lag["max_lag_seconds"], seconds
+                    )
+                    self.loop_lag["last_lag_seconds"] = seconds
+                    self.loop_lag["last_lag_at"] = time.time()
+                    # `event` is a synchronous write to a rotating file. The guard reports
+                    # on the loop, so it must not stall it: `status` carries the count at
+                    # once and the log line is written from a worker thread.
+                    write = loop.create_task(
+                        asyncio.to_thread(self.event, "loop_lag", seconds=seconds)
+                    )
+                    writes.add(write)
+                    write.add_done_callback(writes.discard)
+        finally:
+            # Let a pending line reach the file before `serve()` closes the handler.
+            if writes:
+                await asyncio.gather(*writes, return_exceptions=True)
 
     async def serve(self) -> None:
         if os.name != "posix":
