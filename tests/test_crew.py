@@ -912,6 +912,97 @@ async def test_unicode_escaped_credential_echo_is_redacted(gateway: Any) -> None
     }
 
 
+def offline_crew(monkeypatch: pytest.MonkeyPatch) -> Crew:
+    """A client whose gateway check and login are no-ops, so `_request` reaches the
+    redaction step with whatever `_run_http` is set to return."""
+    crew = Crew()
+    crew.origin = "http://127.0.0.1:1"
+
+    async def nothing() -> None:
+        return None
+
+    monkeypatch.setattr(crew, "_check_gateway", nothing)
+    monkeypatch.setattr(crew, "_authenticate", nothing)
+    return crew
+
+
+async def test_a_credential_learned_while_a_response_is_redacted_is_still_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`_io_lock` is released before the worker runs: request A snapshots the credentials,
+    request B's response then teaches the client a new cookie, and A's worker returns a
+    payload that echoes it (T-281 review, blocker 2). A must redact again before returning,
+    and the worker must never read the live set."""
+    crew = offline_crew(monkeypatch)
+    calls: list[str] = []
+
+    async def http(method: str, url: str, body: Any = None, headers: Any = None) -> bytes:
+        calls.append(url)
+        if url.endswith("/first"):
+            return b'{"echo":"future-cookie"}'
+        crew._learn(("future-cookie",))
+        return b'{"ok":true}'
+
+    entered = threading.Event()
+    release = threading.Event()
+    snapshots: list[tuple[str, ...]] = []
+    redact_payload = Crew._redact_payload
+
+    def paused(payload: bytes, credentials: tuple[str, ...]) -> Any:
+        if b"future-cookie" in payload:
+            snapshots.append(credentials)
+            entered.set()
+            assert release.wait(timeout=5)
+        return redact_payload(payload, credentials)
+
+    monkeypatch.setattr(crew, "_run_http", http)
+    monkeypatch.setattr(crew, "_redact_payload", paused)
+    first = asyncio.create_task(crew._request("GET", "/first"))
+    assert await asyncio.to_thread(entered.wait, 5)
+    assert await crew._request("GET", "/second") == {"ok": True}
+    release.set()
+    assert await first == {"echo": "[redacted]"}
+    assert snapshots == [(), ("future-cookie",)]
+
+
+async def test_a_credential_set_that_never_settles_fails_the_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    crew = offline_crew(monkeypatch)
+    loop = asyncio.get_running_loop()
+    passes = 0
+
+    async def http(method: str, url: str, body: Any = None, headers: Any = None) -> bytes:
+        return b'{"ok":true}'
+
+    def moving(payload: bytes, credentials: tuple[str, ...]) -> Any:
+        nonlocal passes
+        passes += 1
+        # Teach the client on the loop (its only writer) and wait until it has, so the set
+        # has moved before this pass's result lands there.
+        learned = threading.Event()
+        loop.call_soon_threadsafe(crew._learn, (f"cookie-{passes}",))
+        loop.call_soon_threadsafe(learned.set)
+        assert learned.wait(timeout=5)
+        return Crew._redact_payload(payload, credentials)
+
+    monkeypatch.setattr(crew, "_run_http", http)
+    monkeypatch.setattr(crew, "_redact_payload", moving)
+    with pytest.raises(BridgeError, match="kept changing"):
+        await crew._request("GET", "/moving")
+    assert passes == 3
+
+
+def test_learning_the_same_credentials_again_does_not_move_the_generation() -> None:
+    crew = Crew()
+    crew._learn(("a", "", "b"))
+    crew._learn(("a", "b"))
+    assert crew._secrets == {"a", "b"}
+    assert crew._secrets_generation == 1
+    crew._learn(("c",))
+    assert crew._secrets_generation == 2
+
+
 async def test_create_sets_project_before_return_and_reuses_matching_identity(
     gateway: Any, tmp_path: Path
 ) -> None:

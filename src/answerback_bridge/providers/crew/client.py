@@ -32,7 +32,7 @@ import math
 import re
 import sqlite3
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import datetime
@@ -52,6 +52,9 @@ MAX_RESPONSE = 4 * 1024 * 1024
 REQUEST_SECONDS = 15
 SESSION_SECONDS = 55 * 60
 HISTORY_LIMIT = 200
+# How many times one response is redacted when the credential set grows while a pass runs
+# in the worker thread; a set that moves on every pass is an error, not a loop.
+REDACTION_PASSES = 3
 # The first release this client was written for; an older one is refused.
 MINIMUM_VERSION = (0, 12, 2)
 # Release series exercised end to end against this client (login, discovery, history,
@@ -382,11 +385,23 @@ class Crew:
         self._io_lock = asyncio.Lock()
         self._create_lock = asyncio.Lock()
         self._authenticated_until = 0.0
+        # Every credential ever held, and the count of times the set grew. Both are read
+        # and written on the event loop only; `_learn` is the one writer.
         self._secrets: set[str] = set()
+        self._secrets_generation = 0
         self._created_requests: dict[str, dict[str, Any]] = {}
         self._creation_receipts = (
             _CreationReceipts(receipt_path) if receipt_path is not None else None
         )
+
+    def _learn(self, values: Iterable[str | None]) -> None:
+        """Hold more credentials (an empty or missing value is not one). The generation
+        moves only when the set grows, so a request that re-learns the cookies it already
+        holds does not make a concurrent redaction repeat."""
+        added = {value for value in values if value} - self._secrets
+        if added:
+            self._secrets |= added
+            self._secrets_generation += 1
 
     def _credentials(self) -> tuple[str, ...]:
         """An immutable snapshot of the held credentials. Read on the event loop, where
@@ -547,7 +562,7 @@ class Crew:
                 "Crew request failed; check the running gateway and owner login"
             ) from None
         finally:
-            self._secrets.update(cookie.value for cookie in self._cookies if cookie.value)
+            self._learn(cookie.value for cookie in self._cookies)
             _PRIVATE_HTTP.reset(private_logging)
 
     async def _authenticate(self) -> None:
@@ -630,7 +645,7 @@ class Crew:
                 raise BridgeError("Crew login URL does not match the selected port")
             if self.origin is not None and self.origin != origin:
                 raise BridgeError("Crew login gateway changed; reconnect before sending")
-            self._secrets.add(values[0][1])
+            self._learn((values[0][1],))
             self.origin = origin
             async with self._io_lock:
                 self._cookies.clear()
@@ -658,11 +673,20 @@ class Crew:
         await self._authenticate()
         async with self._io_lock:
             payload = await self._run_http(method, f"{self.origin}{path}", body, headers)
-        credentials = self._credentials()
-        try:
-            return await asyncio.to_thread(self._redact_payload, payload, credentials)
-        except (ValueError, UnicodeDecodeError, RecursionError):
-            raise BridgeError("Crew returned an unsupported JSON response") from None
+        # `_io_lock` is released before the worker runs, so another request can learn a
+        # cookie or a link token while this one is being redacted; the worker never sees
+        # it, since it only holds the tuple. Redact again from the original payload with a
+        # fresh snapshot until the set is stable across one whole pass (T-281 review).
+        for _ in range(REDACTION_PASSES):
+            generation = self._secrets_generation
+            credentials = self._credentials()
+            try:
+                value = await asyncio.to_thread(self._redact_payload, payload, credentials)
+            except (ValueError, UnicodeDecodeError, RecursionError):
+                raise BridgeError("Crew returned an unsupported JSON response") from None
+            if generation == self._secrets_generation:
+                return value
+        raise BridgeError("Crew credentials kept changing while a response was redacted")
 
     async def peers(self) -> list[dict[str, Any]]:
         rows = await self._request("GET", "/api/chat/slots")
